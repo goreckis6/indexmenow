@@ -1,0 +1,37 @@
+services:
+  app:
+    build: .
+    image: indexmeplease:latest
+    container_name: indexmeplease
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8006
+      DATABASE_URL: sqlite:////app/data/indexmeplease.db
+    volumes:
+      - ./data:/app/data
+    expose:
+      - "8006"
+
+  # Reverse proxy z automatycznym certyfikatem Let's Encrypt.
+  # Ustaw DOMAIN w .env, np. DOMAIN=index.twojadomena.pl
+  caddy:
+    image: caddy:2-alpine
+    container_name: indexmeplease-caddy
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

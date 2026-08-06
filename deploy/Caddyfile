@@ -1,0 +1,24 @@
+{$DOMAIN} {
+	encode gzip zstd
+
+	# Caddy sam pobiera i odnawia certyfikat Let's Encrypt dla tej domeny.
+	reverse_proxy app:8006 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

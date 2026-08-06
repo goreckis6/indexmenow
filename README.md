@@ -7,6 +7,8 @@ Search Console, Google Indexing API oraz IndexNow (Bing, Yandex, Seznam, Naver).
 Dane trzymane są lokalnie w SQLite, tokeny Google są szyfrowane, a panel wystawiasz
 w sieci domowej pod adresem typu `http://192.168.1.50:8006`.
 
+> Uruchomienie na serwerze (Hostinger VPS, Docker + HTTPS) opisuje **[DEPLOY.md](DEPLOY.md)**.
+
 ---
 
 ## Co potrafi

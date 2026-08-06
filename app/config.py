@@ -50,6 +50,11 @@ class Settings(BaseSettings):
         return f"{self.base_url}/auth/callback"
 
     @property
+    def is_https(self) -> bool:
+        """Behind a TLS-terminating proxy the session cookie must be secure-only."""
+        return self.base_url.startswith("https://")
+
+    @property
     def allowed_email_list(self) -> list[str]:
         return [e.strip().lower() for e in self.allowed_emails.split(",") if e.strip()]
 
