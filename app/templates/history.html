@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+
+{% block title %}Historia — {{ app_name }}{% endblock %}
+{% block page_title %}Historia zadan{% endblock %}
+{% block page_subtitle %}<div class="topbar-sub">{{ total|num }} wpisow</div>{% endblock %}
+
+{% block content %}
+
+<div class="grid cols-4 mb-3">
+  <div class="stat"><span class="accent"></span><div class="label">Zadania (30 dni)</div><div class="value">{{ totals.all|num }}</div></div>
+  <div class="stat ok"><span class="accent"></span><div class="label">Udane</div><div class="value">{{ totals.SUCCESS|num }}</div></div>
+  <div class="stat bad"><span class="accent"></span><div class="label">Bledy</div><div class="value">{{ totals.FAILED|num }}</div></div>
+  <div class="stat warn"><span class="accent"></span><div class="label">Pominiete</div><div class="value">{{ totals.SKIPPED|num }}</div></div>
+</div>
+
+<div class="grid side">
+  <div class="card">
+    <div class="card-head">
+      <form method="get" action="/history" class="filters" style="flex:1">
+        <div class="field">
+          <select class="select" name="site_id" onchange="this.form.submit()">
+            <option value="0">Wszystkie strony</option>
+            {% for site in sites %}
+              <option value="{{ site.id }}" {% if filter_site == site.id %}selected{% endif %}>{{ site.display_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <select class="select" name="job_type" onchange="this.form.submit()">
+            <option value="">Kazdy typ</option>
+            {% for t in job_types %}
+              <option value="{{ t }}" {% if filter_type == t %}selected{% endif %}>{{ t|job_type }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <select class="select" name="status" onchange="this.form.submit()">
+            <option value="">Kazdy status</option>
+            {% for s in statuses %}
+              <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s|status_label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if filter_site or filter_status or filter_type %}
+          <a class="btn btn-ghost btn-sm" href="/history">Wyczysc filtry</a>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="nowrap">Kiedy</th>
+            <th>Strona</th>
+            <th>Typ</th>
+            <th>Cel</th>
+            <th>Status</th>
+            <th>Komunikat</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for job in jobs %}
+          <tr>
+            <td class="tiny muted nowrap" title="{{ job.created_at|dt('%d.%m.%Y %H:%M:%S') }}">{{ job.created_at|ago }}</td>
+            <td class="small nowrap">
+              {% set site = site_map.get(job.site_id) %}
+              {% if site %}<a href="/sites/{{ site.id }}">{{ site.display_name }}</a>{% else %}—{% endif %}
+            </td>
+            <td class="small nowrap">
+              {{ job.job_type|job_type }}
+              {% if job.triggered_by == 'auto' %}<span class="badge tiny">auto</span>{% endif %}
+            </td>
+            <td class="url-cell small" style="max-width:300px" title="{{ job.target }}">{{ job.target|short_url(46) }}</td>
+            <td><span class="badge {{ job.status|status_tone }}">{{ job.status|status_label }}</span></td>
+            <td class="small muted truncate" style="max-width:320px" title="{{ job.message or '' }}">{{ job.message or '—' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="center muted" style="padding:40px">Brak zadan w historii.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if pages > 1 %}
+    <div class="pagination">
+      {% for p in range(1, pages + 1) %}
+        {% if p == 1 or p == pages or (p >= page - 2 and p <= page + 2) %}
+          {% if p == page %}
+            <span class="current">{{ p }}</span>
+          {% else %}
+            <a href="/history?page={{ p }}&site_id={{ filter_site }}&status={{ filter_status }}&job_type={{ filter_type }}">{{ p }}</a>
+          {% endif %}
+        {% elif p == page - 3 or p == page + 3 %}
+          <span>…</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Dziennik zdarzen</h2></div>
+    <div class="card-body tight">
+      {% if activity %}
+        <div class="stack" style="gap:12px;padding:6px 0">
+          {% for entry in activity %}
+            <div class="row" style="align-items:flex-start;gap:9px">
+              <span class="badge {{ 'bad' if entry.level == 'error' else ('warn' if entry.level == 'warning' else 'info') }}" style="margin-top:2px">
+                {{ entry.category }}
+              </span>
+              <div style="min-width:0;flex:1">
+                <div class="small">{{ entry.message }}</div>
+                <div class="tiny muted">{{ entry.created_at|ago }}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted small center" style="padding:24px 0">Brak zdarzen.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

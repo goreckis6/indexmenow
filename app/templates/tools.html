@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+
+{% block title %}Narzedzia — {{ app_name }}{% endblock %}
+{% block page_title %}Narzedzia{% endblock %}
+{% block page_subtitle %}<div class="topbar-sub">Szybkie indeksowanie, IndexNow i analiza SEO</div>{% endblock %}
+
+{% block content %}
+
+<div class="tabs">
+  <a class="tab {% if tool == 'instant' %}active{% endif %}" href="/tools?tool=instant">Szybkie indeksowanie</a>
+  <a class="tab {% if tool == 'indexnow' %}active{% endif %}" href="/tools?tool=indexnow">IndexNow (Bing / Yandex)</a>
+  <a class="tab {% if tool == 'preview' %}active{% endif %}" href="/tools/preview">Podglad SEO i Open Graph</a>
+  <a class="tab {% if tool == 'sitemap' %}active{% endif %}" href="/tools/sitemap">Przegladarka sitemap</a>
+</div>
+
+{% if not sites and tool in ('instant', 'indexnow') %}
+  <div class="card"><div class="empty">
+    <div class="icon">{{ icon('globe', 25) }}</div>
+    <h3>Najpierw dodaj strone</h3>
+    <p>Zgloszenia do indeksowania wymagaja wlasciwosci potwierdzonej w Google Search Console.</p>
+    <a class="btn btn-primary" href="/sites">{{ icon('plus', 16) }} Przejdz do stron</a>
+  </div></div>
+
+{% elif tool == 'instant' %}
+<div class="grid side">
+  <div class="card">
+    <div class="card-head">
+      <div><h2>Zglos adresy do Google</h2><p>Natychmiastowe powiadomienie przez Indexing API</p></div>
+    </div>
+    <div class="card-body">
+      <form method="post" action="/tools/instant" data-busy>
+        <div class="form-row">
+          <div class="field">
+            <label class="lbl">Strona</label>
+            <select class="select" name="site_id" required>
+              {% for site in sites %}<option value="{{ site.id }}">{{ site.display_name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label class="lbl">Typ powiadomienia</label>
+            <select class="select" name="notification_type">
+              <option value="URL_UPDATED">Strona dodana lub zaktualizowana</option>
+              <option value="URL_DELETED">Strona usunieta</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label class="lbl">Adresy URL (jeden na linie, maks. 50 na raz)</label>
+          <textarea class="textarea" name="urls_blob" required data-url-counter="#instant-count"
+                    placeholder="https://twojastrona.pl/nowy-wpis&#10;https://twojastrona.pl/oferta"></textarea>
+          <div class="hint">Wykryte adresy: <strong id="instant-count">0</strong></div>
+        </div>
+        <button class="btn btn-primary" type="submit">{{ icon('zap', 16) }} Zglos teraz</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Jak to dziala</h2></div>
+    <div class="card-body stack small soft">
+      <div class="callout">{{ icon('info') }}<div>
+        Zgloszenie mowi Google, ze adres jest nowy lub zmieniony. Robot zwykle odwiedza go
+        w ciagu kilku minut do kilkudziesieciu godzin — ale samo zgloszenie nie gwarantuje indeksacji.
+      </div></div>
+      <div><strong>Co zwieksza szanse:</strong></div>
+      <div>· strona zwraca kod 200 i nie ma dyrektywy <code>noindex</code>,</div>
+      <div>· adres jest w sitemapie i ma linki wewnetrzne,</div>
+      <div>· tresc jest unikalna i wartosciowa,</div>
+      <div>· canonical wskazuje na ten sam adres.</div>
+      <div class="callout warn">{{ icon('alert') }}<div>
+        Kazde zgloszenie zuzywa jednostke dziennego limitu (domyslnie 200/dzien na projekt Google Cloud).
+      </div></div>
+    </div>
+  </div>
+</div>
+
+{% elif tool == 'indexnow' %}
+<div class="grid side">
+  <div class="card">
+    <div class="card-head">
+      <div><h2>Zglos przez IndexNow</h2><p>Jedno zgloszenie trafia do Bing, Yandex, Seznam i Naver</p></div>
+    </div>
+    <div class="card-body">
+      <form method="post" action="/tools/indexnow" data-busy>
+        <div class="field">
+          <label class="lbl">Strona</label>
+          <select class="select" name="site_id" required>
+            {% for site in sites %}
+              <option value="{{ site.id }}">{{ site.display_name }}{% if not site.indexnow_enabled %} (IndexNow wylaczony){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl">Adresy URL</label>
+          <textarea class="textarea" name="urls_blob" required data-url-counter="#indexnow-count"
+                    placeholder="https://twojastrona.pl/nowy-wpis"></textarea>
+          <div class="hint">Wykryte adresy: <strong id="indexnow-count">0</strong></div>
+        </div>
+        <button class="btn btn-primary" type="submit">{{ icon('rocket', 16) }} Wyslij do IndexNow</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Wymagania</h2></div>
+    <div class="card-body stack small soft">
+      <div>IndexNow wymaga pliku z kluczem w glownym katalogu strony. Klucz znajdziesz
+        w zakladce <strong>Ustawienia</strong> kazdej strony.</div>
+      <div class="code-block">https://twojastrona.pl/&lt;klucz&gt;.txt</div>
+      <div>Plik ma zawierac dokladnie ten sam klucz, ktory panel wysyla w zgloszeniu.
+        Bez niego wyszukiwarki odrzuca zadanie z kodem 403.</div>
+      <div class="callout ok">{{ icon('check') }}<div>IndexNow nie ma limitow dziennych i jest darmowy.</div></div>
+    </div>
+  </div>
+</div>
+
+{% elif tool == 'preview' %}
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" action="/tools/preview" data-busy>
+      <div class="input-group">
+        <input class="input" type="text" name="url" value="{{ preview_url or '' }}" required
+               placeholder="https://twojastrona.pl/strona-do-sprawdzenia">
+        <button class="btn btn-primary" type="submit">{{ icon('search', 16) }} Analizuj</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if meta %}
+  {% if meta.error %}
+    <div class="card"><div class="card-body"><div class="callout bad">{{ icon('alert') }}<div>{{ meta.error }}</div></div></div></div>
+  {% else %}
+  <div class="grid side">
+    <div class="stack">
+      <div class="card">
+        <div class="card-head"><h2>Podglad w wynikach Google</h2></div>
+        <div class="card-body">
+          <div class="serp-preview">
+            <div class="serp-url">{{ meta.final_url }}</div>
+            <div class="serp-title">{{ meta.title or 'Brak tytulu' }}</div>
+            <div class="serp-desc">{{ meta.description or 'Brak meta description — Google wygeneruje opis samodzielnie.' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Podglad linku (Open Graph)</h2></div>
+        <div class="card-body">
+          <div class="og-preview">
+            {% if meta.og.image %}<img src="{{ meta.og.image }}" alt="">{% else %}<div style="aspect-ratio:1.91/1;background:var(--muted-soft);display:grid;place-items:center;color:var(--text-faint);font-size:.8rem">brak og:image</div>{% endif %}
+            <div class="body">
+              <div class="domain">{{ meta.final_url.split('/')[2] }}</div>
+              <div class="title">{{ meta.og.title or meta.title or 'Brak tytulu' }}</div>
+              <div class="desc">{{ meta.og.description or meta.description or '' }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Znaczniki</h2></div>
+        <div class="table-wrap">
+          <table class="table">
+            <tbody>
+              <tr><td class="strong small">Tytul</td><td class="small">{{ meta.title or '—' }} <span class="muted tiny">({{ (meta.title or '')|length }} zn.)</span></td></tr>
+              <tr><td class="strong small">Opis</td><td class="small">{{ meta.description or '—' }} <span class="muted tiny">({{ (meta.description or '')|length }} zn.)</span></td></tr>
+              <tr><td class="strong small">H1</td><td class="small">{{ meta.h1 or '—' }}</td></tr>
+              <tr><td class="strong small">Canonical</td><td class="small">{{ meta.canonical or '—' }}</td></tr>
+              <tr><td class="strong small">Robots</td><td class="small">{{ meta.robots or 'domyslne (index, follow)' }}</td></tr>
+              <tr><td class="strong small">Jezyk</td><td class="small">{{ meta.lang or '—' }}</td></tr>
+              <tr><td class="strong small">og:title</td><td class="small">{{ meta.og.title or '—' }}</td></tr>
+              <tr><td class="strong small">og:image</td><td class="small truncate" style="max-width:420px">{{ meta.og.image or '—' }}</td></tr>
+              <tr><td class="strong small">twitter:card</td><td class="small">{{ meta.twitter.card or '—' }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="card">
+        <div class="card-head"><h2>Diagnostyka</h2></div>
+        <div class="card-body stack" style="gap:9px">
+          {% for issue in meta.issues %}
+            <div class="callout {{ 'bad' if issue.level == 'error' else ('warn' if issue.level == 'warning' else ('ok' if issue.level == 'success' else '')) }}">
+              {{ icon('alert' if issue.level in ('error','warning') else 'check') }}
+              <div>{{ issue.text }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Odpowiedz serwera</h2></div>
+        <div class="card-body">
+          <div class="switch-row"><div class="txt"><strong>Kod HTTP</strong><span>{{ meta.status_code }}</span></div></div>
+          <div class="switch-row"><div class="txt"><strong>Czas odpowiedzi</strong><span>{{ meta.elapsed_ms }} ms</span></div></div>
+          <div class="switch-row"><div class="txt"><strong>Rozmiar HTML</strong><span>{{ meta.size_kb }} kB</span></div></div>
+          <div class="switch-row"><div class="txt"><strong>Adres koncowy</strong><span class="truncate">{{ meta.final_url }}</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+
+{% elif tool == 'sitemap' %}
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" action="/tools/sitemap" data-busy>
+      <div class="input-group">
+        <input class="input" type="text" name="url" value="{{ sitemap_url or '' }}" required
+               placeholder="https://twojastrona.pl/sitemap.xml">
+        <button class="btn btn-primary" type="submit">{{ icon('sitemap', 16) }} Wczytaj</button>
+      </div>
+      <div class="hint">Indeksy sitemap sa rozwijane rekurencyjnie, obslugiwane sa tez pliki .gz.</div>
+    </form>
+  </div>
+</div>
+
+{% if sitemap_result %}
+  {% if sitemap_result.error and not sitemap_result.count %}
+    <div class="card"><div class="card-body"><div class="callout bad">{{ icon('alert') }}<div>{{ sitemap_result.error }}</div></div></div></div>
+  {% else %}
+  <div class="grid cols-3 mb-3">
+    <div class="stat"><span class="accent"></span><div class="label">Znalezione adresy</div><div class="value">{{ sitemap_result.count|num }}</div></div>
+    <div class="stat info"><span class="accent"></span><div class="label">Typ pliku</div><div class="value" style="font-size:1.2rem">{{ 'Indeks sitemap' if sitemap_result.is_index else 'Sitemapa' }}</div></div>
+    <div class="stat"><span class="accent"></span><div class="label">Podsitemapy</div><div class="value">{{ sitemap_result.child_sitemaps|length }}</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Adresy w sitemapie</h2>
+      <div class="spacer"></div>
+      <span class="muted small">Pokazano do 500 pierwszych</span>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th style="width:56px" class="num">#</th><th>Adres</th><th class="nowrap">Ostatnia modyfikacja</th><th class="num">Priorytet</th></tr></thead>
+        <tbody>
+        {% for entry in sitemap_result.entries %}
+          <tr>
+            <td class="num tiny muted">{{ loop.index }}</td>
+            <td class="url-cell"><a href="{{ entry.url }}" target="_blank" rel="noopener">{{ entry.url|short_url(78) }}</a></td>
+            <td class="tiny muted nowrap">{{ entry.lastmod|dt('%d.%m.%Y') if entry.lastmod else '—' }}</td>
+            <td class="num tiny muted">{{ entry.priority if entry.priority is not none else '—' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+
+{% endif %}
+{% endblock %}

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nie znaleziono — {{ app_name }}</title>
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script>(function(){var t=localStorage.getItem("imp-theme");if(t)document.documentElement.setAttribute("data-theme",t);})();</script>
+</head>
+<body>
+<div style="min-height:100vh;display:grid;place-items:center;padding:24px">
+  <div class="card" style="max-width:460px;width:100%">
+    <div class="empty">
+      <div class="icon" style="font-size:1.4rem;font-weight:800;color:var(--brand)">404</div>
+      <h3>Nie znaleziono strony</h3>
+      <p>Adres <code>{{ request.url.path }}</code> nie istnieje w panelu.</p>
+      <a class="btn btn-primary" href="/">Wroc na pulpit</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>

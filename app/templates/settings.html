@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+
+{% block title %}Ustawienia — {{ app_name }}{% endblock %}
+{% block page_title %}Ustawienia{% endblock %}
+{% block page_subtitle %}<div class="topbar-sub">{{ workspace.name }}</div>{% endblock %}
+
+{% block content %}
+
+<div class="grid side">
+  <div class="stack">
+
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Workspace</h2><p>Limity i automatyzacja dla wszystkich stron w tym workspace</p></div>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/settings/workspace" data-busy>
+          <div class="form-row">
+            <div class="field">
+              <label class="lbl">Nazwa</label>
+              <input class="input" type="text" name="name" value="{{ workspace.name }}" required>
+            </div>
+            <div class="field">
+              <label class="lbl">Dzienny limit zgloszen do Google</label>
+              <input class="input" type="number" name="daily_quota" min="0" max="100000" value="{{ workspace.daily_quota }}">
+              <div class="hint">
+                Wykorzystano dzis: <strong>{{ quota_used }}</strong> z {{ workspace.daily_quota }}.
+                Google przyznaje domyslnie 200 zgloszen dziennie na projekt.
+              </div>
+            </div>
+          </div>
+          <div class="switch-row">
+            <label class="switch"><input type="checkbox" name="auto_index_enabled" value="true" {% if workspace.auto_index_enabled %}checked{% endif %}><span class="track"></span></label>
+            <div class="txt">
+              <strong>Automatyczne indeksowanie</strong>
+              <span>Harmonogram uruchamia sie codziennie o {{ '%02d'|format(app_settings.auto_index_hour) }}:00 i obsluguje strony z wlaczonym auto-indeksem</span>
+            </div>
+          </div>
+          <button class="btn btn-primary mt-2" type="submit">{{ icon('check', 16) }} Zapisz</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Konta serwisowe Google</h2><p>Kazde konto ma wlasna pule 200 zgloszen dziennie</p></div>
+      </div>
+      <div class="card-body">
+        {% if service_accounts %}
+          <div class="table-wrap mb-2">
+            <table class="table">
+              <thead><tr><th>Konto</th><th>Projekt</th><th>Status</th><th class="nowrap">Uzyte</th><th class="right">Akcje</th></tr></thead>
+              <tbody>
+              {% for account in service_accounts %}
+                <tr>
+                  <td>
+                    <div class="strong small">{{ account.name }}</div>
+                    <div class="tiny muted">{{ account.client_email }}</div>
+                  </td>
+                  <td class="small muted">{{ account.project_id or '—' }}</td>
+                  <td>
+                    <span class="badge {{ 'ok' if account.is_active else 'muted' }}">
+                      {{ 'Aktywne' if account.is_active else 'Wylaczone' }}
+                    </span>
+                  </td>
+                  <td class="tiny muted nowrap">{{ account.last_used_at|ago }}</td>
+                  <td class="right">
+                    <div class="btn-row" style="justify-content:flex-end">
+                      <form method="post" action="/settings/service-account/{{ account.id }}/toggle" style="display:inline">
+                        <button class="btn btn-sm" type="submit">{{ 'Wylacz' if account.is_active else 'Wlacz' }}</button>
+                      </form>
+                      <form method="post" action="/settings/service-account/{{ account.id }}/delete" style="display:inline"
+                            data-confirm="Usunac konto serwisowe {{ account.client_email }}?">
+                        <button class="btn btn-sm btn-danger" type="submit">{{ icon('trash', 14) }}</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="callout mb-2">
+            {{ icon('info') }}
+            <div>
+              Bez konta serwisowego panel uzywa tokena Twojego konta Google — to w zupelnosci wystarcza.
+              Konta serwisowe dodaj tylko wtedy, gdy chcesz zwiekszyc dzienny limit zgloszen.
+            </div>
+          </div>
+        {% endif %}
+
+        <form method="post" action="/settings/service-account" enctype="multipart/form-data" data-busy>
+          <div class="form-row three">
+            <div class="field">
+              <label class="lbl">Plik JSON konta serwisowego</label>
+              <input class="input" type="file" name="file" accept=".json" required>
+            </div>
+            <div class="field">
+              <label class="lbl">Etykieta</label>
+              <input class="input" type="text" name="label" placeholder="np. projekt-seo-1">
+            </div>
+            <div class="field">
+              <label class="lbl">Dzienny limit</label>
+              <input class="input" type="number" name="daily_quota" value="200" min="1">
+            </div>
+          </div>
+          <button class="btn" type="submit">{{ icon('upload', 16) }} Dodaj konto serwisowe</button>
+          <div class="hint">
+            Po dodaniu wejdz w Search Console → Ustawienia → Uzytkownicy i uprawnienia i dodaj adres
+            konta serwisowego jako <strong>wlasciciela</strong> kazdej strony.
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Workspace'y</h2></div>
+      <div class="card-body">
+        <div class="stack" style="gap:8px">
+          {% for ws in workspaces %}
+            <div class="row between" style="padding:8px 0;border-bottom:1px solid var(--border)">
+              <div>
+                <div class="strong small">{{ ws.name }}</div>
+                <div class="tiny muted">limit {{ ws.daily_quota }}/dzien · {{ ws.sites|length }} stron</div>
+              </div>
+              {% if ws.id == workspace.id %}
+                <span class="badge brand">Aktywny</span>
+              {% else %}
+                <form method="post" action="/settings/workspace/switch">
+                  <input type="hidden" name="workspace_id" value="{{ ws.id }}">
+                  <button class="btn btn-sm" type="submit">Przelacz</button>
+                </form>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        <form method="post" action="/settings/workspace/create" class="mt-2">
+          <div class="input-group">
+            <input class="input" type="text" name="name" placeholder="Nazwa nowego workspace" required>
+            <button class="btn" type="submit">{{ icon('plus', 15) }} Utworz</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <div class="card-head"><h2>Polaczenie z Google</h2></div>
+      <div class="card-body">
+        <div class="row mb-2" style="gap:11px">
+          {% if user.picture %}
+            <img class="avatar" src="{{ user.picture }}" alt="" referrerpolicy="no-referrer" style="width:40px;height:40px;flex:0 0 40px">
+          {% else %}
+            <span class="avatar" style="width:40px;height:40px;flex:0 0 40px">{{ (user.name or user.email)[0]|upper }}</span>
+          {% endif %}
+          <div style="min-width:0">
+            <div class="strong">{{ user.name or 'Uzytkownik' }}</div>
+            <div class="tiny muted truncate">{{ user.email }}</div>
+          </div>
+        </div>
+
+        <div class="stack" style="gap:7px">
+          {% for scope in required_scopes if scope.startswith('https://') %}
+            <div class="row" style="gap:8px">
+              {% if scope in scopes %}
+                <span class="badge ok">{{ icon('check', 12) }}</span>
+              {% else %}
+                <span class="badge bad">{{ icon('x', 12) }}</span>
+              {% endif %}
+              <span class="tiny muted truncate" title="{{ scope }}">{{ scope.split('/')[-1] }}</span>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="btn-row mt-2">
+          <form method="post" action="/settings/test-connection" data-busy style="display:inline">
+            <button class="btn btn-sm" type="submit">{{ icon('shield', 14) }} Testuj polaczenie</button>
+          </form>
+          <a class="btn btn-sm btn-ghost" href="/auth/google">{{ icon('refresh', 14) }} Odnow zgody</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Wykorzystanie limitu</h2></div>
+      <div class="card-body">
+        <div data-chart='{{ {
+          "type": "area",
+          "height": 150,
+          "labels": quota_history|map(attribute="day")|list,
+          "series": [{"name": "Zgloszenia", "data": quota_history|map(attribute="google")|list, "color": "brand"}]
+        }|tojson }}'></div>
+        <div class="hint">Ostatnie 14 dni zgloszen do Google Indexing API.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Harmonogram</h2></div>
+      <div class="card-body">
+        {% for run in next_runs %}
+          <div class="switch-row">
+            <div class="txt">
+              <strong>
+                {% if run.id == 'auto-index' %}Auto-indeksowanie
+                {% elif run.id == 'scan-sitemaps' %}Skan sitemap
+                {% else %}Migawka statystyk{% endif %}
+              </strong>
+              <span>{{ run.next_run[:16]|replace('T', ' ') if run.next_run else 'nie zaplanowano' }}</span>
+            </div>
+            {{ icon('clock', 16) }}
+          </div>
+        {% else %}
+          <p class="muted small">Harmonogram nie jest uruchomiony.</p>
+        {% endfor %}
+        {% if running %}
+          <div class="callout mt-2">{{ icon('info') }}<div>Zadania w toku: {{ running|join(', ') }}</div></div>
+        {% endif %}
+        <div class="hint mt-2">
+          Zmien godziny i czestotliwosc w pliku <code>.env</code>
+          (<code>AUTO_INDEX_HOUR</code>, <code>SITEMAP_SCAN_INTERVAL_HOURS</code>) i zrestartuj aplikacje.
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>System</h2></div>
+      <div class="card-body">
+        <div class="switch-row"><div class="txt"><strong>Adres panelu</strong><span>{{ app_settings.base_url }}</span></div></div>
+        <div class="switch-row"><div class="txt"><strong>Nasluchiwanie</strong><span>{{ app_settings.host }}:{{ app_settings.port }}</span></div></div>
+        <div class="switch-row"><div class="txt"><strong>Baza danych</strong><span>{{ app_settings.database_url }}</span></div></div>
+        <div class="switch-row"><div class="txt"><strong>Strefa czasowa</strong><span>{{ app_settings.timezone }}</span></div></div>
+        <div class="btn-row mt-2">
+          <a class="btn btn-sm btn-ghost" href="/api/docs" target="_blank">{{ icon('file', 14) }} Dokumentacja API</a>
+          <a class="btn btn-sm btn-danger" href="/logout?revoke=1"
+             data-confirm="Wylogowac i cofnac dostep aplikacji do konta Google?">{{ icon('logout', 14) }} Odlacz konto</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

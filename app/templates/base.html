@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script>
+    (function () {
+      var t = localStorage.getItem("imp-theme");
+      if (t) document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+</head>
+<body>
+{% from "partials/icons.html" import icon %}
+
+<div class="flash-stack">
+  {% for flash in flashes %}
+    <div class="flash {{ flash.category }}">
+      <div style="flex:1">{{ flash.message }}</div>
+      <button type="button" aria-label="Zamknij">&times;</button>
+    </div>
+  {% endfor %}
+</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <a href="/" class="brand">
+      <span class="brand-mark">I</span>
+      <span>IndexMePlease<small>panel indeksowania</small></span>
+    </a>
+
+    <nav class="nav">
+      <span class="nav-label">Panel</span>
+      <a href="/" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">{{ icon('dashboard') }} Pulpit</a>
+      <a href="/sites" class="nav-item {% if active_page == 'sites' %}active{% endif %}">{{ icon('globe') }} Strony</a>
+      <a href="/urls" class="nav-item {% if active_page == 'urls' %}active{% endif %}">{{ icon('link') }} Adresy URL</a>
+      <a href="/history" class="nav-item {% if active_page == 'history' %}active{% endif %}">{{ icon('history') }} Historia</a>
+
+      <span class="nav-label">Narzedzia</span>
+      <a href="/tools?tool=instant" class="nav-item {% if active_page == 'tools' %}active{% endif %}">{{ icon('zap') }} Szybkie indeksowanie</a>
+      <a href="/settings" class="nav-item {% if active_page == 'settings' %}active{% endif %}">{{ icon('settings') }} Ustawienia</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      {% if workspace %}
+      <div class="pill mb-1" style="width:100%">
+        {{ icon('shield', 14) }}
+        <span class="truncate" title="{{ workspace.name }}">{{ workspace.name }}</span>
+      </div>
+      {% endif %}
+      <a href="/settings" class="user-chip">
+        {% if user and user.picture %}
+          <img class="avatar" src="{{ user.picture }}" alt="" referrerpolicy="no-referrer">
+        {% else %}
+          <span class="avatar">{{ (user.name or user.email or '?')[0]|upper }}</span>
+        {% endif %}
+        <span class="meta">
+          <strong>{{ user.name or 'Uzytkownik' }}</strong>
+          <span>{{ user.email }}</span>
+        </span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="btn btn-ghost btn-sm mobile-toggle" data-nav-toggle aria-label="Menu">{{ icon('menu') }}</button>
+      <div>
+        <h1>{% block page_title %}Pulpit{% endblock %}</h1>
+        {% block page_subtitle %}{% endblock %}
+      </div>
+      <div class="spacer"></div>
+
+      <span class="badge info hidden" data-task-indicator data-busy="{{ '1' if running else '0' }}">
+        <span class="spinner"></span> Zadanie w toku
+      </span>
+
+      {% block topbar_actions %}{% endblock %}
+
+      <button class="btn btn-ghost btn-sm" data-theme-toggle title="Zmien motyw">{{ icon('moon', 16) }}</button>
+      <a href="/logout" class="btn btn-ghost btn-sm" title="Wyloguj">{{ icon('logout', 16) }}</a>
+    </header>
+
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

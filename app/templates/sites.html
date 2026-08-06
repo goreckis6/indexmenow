@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+
+{% block title %}Strony — {{ app_name }}{% endblock %}
+{% block page_title %}Strony{% endblock %}
+{% block page_subtitle %}<div class="topbar-sub">{{ rows|length }} wlasciwosci w workspace {{ workspace.name }}</div>{% endblock %}
+
+{% block topbar_actions %}
+  <form method="post" action="/sites/import" data-busy style="display:inline">
+    <button class="btn btn-sm" type="submit">{{ icon('download', 15) }} Importuj z GSC</button>
+  </form>
+  <form method="post" action="/sites/run-all" data-busy style="display:inline">
+    <button class="btn btn-primary btn-sm" type="submit">{{ icon('rocket', 15) }} Indeksuj wszystko</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+
+<div class="card mb-3">
+  <div class="card-head">
+    <div>
+      <h2>Dodaj strone recznie</h2>
+      <p>Podaj adres wlasciwosci dokladnie tak, jak widnieje w Search Console</p>
+    </div>
+  </div>
+  <div class="card-body">
+    <form method="post" action="/sites/add" data-busy>
+      <div class="input-group">
+        <input class="input" type="text" name="property_url" required
+               placeholder="https://twojastrona.pl/  albo  sc-domain:twojastrona.pl">
+        <button class="btn btn-primary" type="submit">{{ icon('plus', 16) }} Dodaj</button>
+      </div>
+      <div class="hint">
+        Wlasciwosc typu <strong>Domena</strong> zapisuje sie jako <code>sc-domain:example.com</code>,
+        a typu <strong>Prefiks URL</strong> jako <code>https://example.com/</code>.
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if rows %}
+<div class="card">
+  <div class="card-head">
+    <h2>Wszystkie strony</h2>
+    <div class="spacer"></div>
+    <span class="muted small">Kliknij nazwe, aby otworzyc szczegoly</span>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Strona</th>
+          <th class="num">URL-e</th>
+          <th class="num">Zaindeks.</th>
+          <th style="width:170px">Pokrycie</th>
+          <th>Auto-index</th>
+          <th>IndexNow</th>
+          <th class="nowrap">Ostatni skan</th>
+          <th class="right">Akcje</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>
+            <a href="/sites/{{ row.site.id }}" class="strong">{{ row.site.display_name }}</a>
+            <div class="tiny muted">
+              {{ row.site.permission_level or 'brak danych' }}
+              {% if not row.site.is_active %}· <span style="color:var(--bad)">wylaczona</span>{% endif %}
+              {% if row.busy %}· <span style="color:var(--info)">zadanie w toku</span>{% endif %}
+            </div>
+          </td>
+          <td class="num">{{ row.stats.total|num }}</td>
+          <td class="num">{{ row.stats.INDEXED|num }}</td>
+          <td>
+            {% set coverage = row.stats.coverage|round|int %}
+            <div class="meter">
+              <div class="progress {% if coverage >= 80 %}ok{% elif coverage >= 40 %}warn{% else %}bad{% endif %}">
+                <span style="width: {{ coverage }}%"></span>
+              </div>
+              <span class="pct">{{ coverage }}%</span>
+            </div>
+          </td>
+          <td>
+            {% if row.site.auto_index %}
+              <span class="badge ok"><span class="dot"></span> {{ row.site.daily_limit }}/dzien</span>
+            {% else %}
+              <span class="badge">Wylaczone</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.site.indexnow_enabled %}
+              <span class="badge brand">Aktywny</span>
+            {% else %}
+              <span class="badge">—</span>
+            {% endif %}
+          </td>
+          <td class="tiny muted nowrap">{{ row.site.last_scan_at|ago }}</td>
+          <td class="right">
+            <div class="btn-row" style="justify-content:flex-end">
+              <form method="post" action="/sites/{{ row.site.id }}/scan" data-busy style="display:inline">
+                <button class="btn btn-sm" type="submit" title="Pobierz URL-e z sitemap">{{ icon('sitemap', 14) }}</button>
+              </form>
+              <form method="post" action="/sites/{{ row.site.id }}/run" data-busy style="display:inline">
+                <button class="btn btn-sm btn-primary" type="submit">{{ icon('rocket', 14) }} Indeksuj</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty">
+    <div class="icon">{{ icon('globe', 25) }}</div>
+    <h3>Nie masz jeszcze zadnej strony</h3>
+    <p>
+      Najszybciej zaczniesz importujac wlasciwosci z Google Search Console —
+      panel pobierze wszystkie strony, do ktorych ma dostep Twoje konto.
+    </p>
+    <form method="post" action="/sites/import" data-busy>
+      <button class="btn btn-primary" type="submit">{{ icon('download', 16) }} Importuj z Search Console</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

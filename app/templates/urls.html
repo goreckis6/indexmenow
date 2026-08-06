@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+
+{% block title %}Adresy URL — {{ app_name }}{% endblock %}
+{% block page_title %}Adresy URL{% endblock %}
+{% block page_subtitle %}<div class="topbar-sub">{{ total|num }} adresow · pokrycie {{ stats.coverage }}%</div>{% endblock %}
+
+{% block topbar_actions %}
+  <a class="btn btn-sm" href="/urls/export.csv?site_id={{ filter_site }}&status={{ filter_status }}">
+    {{ icon('download', 15) }} Eksport CSV
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<div class="grid cols-4 mb-3">
+  <div class="stat"><span class="accent"></span><div class="label">Wszystkie</div><div class="value">{{ stats.total|num }}</div></div>
+  <div class="stat ok"><span class="accent"></span><div class="label">Zaindeksowane</div><div class="value">{{ stats.INDEXED|num }}</div></div>
+  <div class="stat warn"><span class="accent"></span><div class="label">Niezaindeksowane</div><div class="value">{{ stats.NOT_INDEXED|num }}</div></div>
+  <div class="stat info"><span class="accent"></span><div class="label">Niesprawdzone</div><div class="value">{{ stats.UNKNOWN|num }}</div></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <form method="get" action="/urls" class="filters" style="flex:1">
+      <div class="field">
+        <select class="select" name="site_id" onchange="this.form.submit()">
+          <option value="0">Wszystkie strony</option>
+          {% for site in sites %}
+            <option value="{{ site.id }}" {% if filter_site == site.id %}selected{% endif %}>{{ site.display_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <select class="select" name="status" onchange="this.form.submit()">
+          <option value="">Kazdy status</option>
+          {% for s in statuses %}
+            <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s|status_label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field" style="flex:1;min-width:220px">
+        <input class="input" type="search" name="q" value="{{ query }}" placeholder="Szukaj w adresach…">
+      </div>
+      <button class="btn" type="submit">{{ icon('search', 15) }} Filtruj</button>
+      {% if filter_site or filter_status or query %}
+        <a class="btn btn-ghost" href="/urls">Wyczysc</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <form method="post" action="/urls/action" id="urls-form">
+    <input type="hidden" name="redirect_to" value="/urls?site_id={{ filter_site }}&status={{ filter_status }}&q={{ query }}&page={{ page }}">
+    <div class="bulk-bar hidden" data-bulk-bar>
+      <strong><span data-bulk-count>0</span> zaznaczonych</strong>
+      <div style="flex:1"></div>
+      <button class="btn btn-sm btn-primary" type="submit" name="action" value="submit">{{ icon('zap', 14) }} Zglos do Google</button>
+      <button class="btn btn-sm" type="submit" name="action" value="inspect">{{ icon('search', 14) }} Sprawdz status</button>
+      <button class="btn btn-sm" type="submit" name="action" value="reset">{{ icon('refresh', 14) }} Resetuj status</button>
+      <button class="btn btn-sm btn-danger" type="submit" name="action" value="delete"
+              onclick="return confirm('Usunac zaznaczone adresy?')">{{ icon('trash', 14) }} Usun</button>
+    </div>
+
+    <div class="table-wrap" id="urls-table">
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="checkbox-col"><input type="checkbox" data-select-all="#urls-table" aria-label="Zaznacz wszystkie"></th>
+            <th>Adres</th>
+            <th>Strona</th>
+            <th>Status</th>
+            <th>Szczegoly Google</th>
+            <th class="nowrap">Sprawdzony</th>
+            <th class="nowrap">Zgloszony</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for page_url in rows %}
+          <tr>
+            <td><input type="checkbox" name="url_ids" value="{{ page_url.id }}"></td>
+            <td class="url-cell">
+              <a href="{{ page_url.url }}" target="_blank" rel="noopener" title="{{ page_url.url }}">{{ page_url.url|short_url(64) }}</a>
+            </td>
+            <td class="small muted nowrap">
+              {% set site = site_map.get(page_url.site_id) %}
+              {% if site %}<a href="/sites/{{ site.id }}">{{ site.display_name }}</a>{% else %}—{% endif %}
+            </td>
+            <td><span class="badge {{ page_url.index_status|status_tone }}">{{ page_url.index_status|status_label }}</span></td>
+            <td class="small muted truncate" style="max-width:250px" title="{{ page_url.coverage_state or page_url.error_message or '' }}">
+              {{ page_url.coverage_state or page_url.error_message or '—' }}
+            </td>
+            <td class="tiny muted nowrap">{{ page_url.last_checked_at|ago }}</td>
+            <td class="tiny muted nowrap">{{ page_url.last_submitted_at|ago }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="center muted" style="padding:40px">
+            Brak adresow spelniajacych kryteria. Dodaj URL-e w widoku strony albo zeskanuj sitemapy.
+          </td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+
+  {% if pages > 1 %}
+  <div class="pagination">
+    {% for p in range(1, pages + 1) %}
+      {% if p == 1 or p == pages or (p >= page - 2 and p <= page + 2) %}
+        {% if p == page %}
+          <span class="current">{{ p }}</span>
+        {% else %}
+          <a href="/urls?page={{ p }}&site_id={{ filter_site }}&status={{ filter_status }}&q={{ query }}">{{ p }}</a>
+        {% endif %}
+      {% elif p == page - 3 or p == page + 3 %}
+        <span>…</span>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

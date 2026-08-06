@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+
+{% block title %}Pulpit — {{ app_name }}{% endblock %}
+{% block page_title %}Pulpit{% endblock %}
+{% block page_subtitle %}<div class="topbar-sub">{{ workspace.name }} · {{ site_rows|length }} stron</div>{% endblock %}
+
+{% block topbar_actions %}
+  <form method="post" action="/sites/run-all" data-busy style="display:inline">
+    <button class="btn btn-primary btn-sm" type="submit">{{ icon('rocket', 16) }} Indeksuj wszystko</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+
+{% if not site_rows %}
+  <div class="card">
+    <div class="empty">
+      <div class="icon">{{ icon('globe', 25) }}</div>
+      <h3>Zacznij od dodania stron</h3>
+      <p>
+        Zaimportuj wlasciwosci z Google Search Console. Panel pobierze sitemapy,
+        sprawdzi ktore adresy nie sa zaindeksowane i zglosi je do Google.
+      </p>
+      <form method="post" action="/sites/import" data-busy>
+        <button class="btn btn-primary" type="submit">{{ icon('download', 16) }} Importuj z Search Console</button>
+      </form>
+    </div>
+  </div>
+{% else %}
+
+<div class="grid cols-4 mb-3">
+  <div class="stat">
+    <span class="accent"></span>
+    <div class="label">Wszystkie URL-e</div>
+    <div class="value">{{ stats.total|num }}</div>
+    <div class="sub">w {{ site_rows|length }} {% if site_rows|length == 1 %}stronie{% else %}stronach{% endif %}</div>
+  </div>
+  <div class="stat ok">
+    <span class="accent"></span>
+    <div class="label">Zaindeksowane</div>
+    <div class="value">{{ stats.INDEXED|num }}</div>
+    <div class="sub">pokrycie {{ stats.coverage }}%</div>
+  </div>
+  <div class="stat warn">
+    <span class="accent"></span>
+    <div class="label">Poza indeksem</div>
+    <div class="value">{{ (stats.NOT_INDEXED + stats.EXCLUDED)|num }}</div>
+    <div class="sub">{{ stats.NOT_INDEXED|num }} do zgloszenia · {{ stats.EXCLUDED|num }} wykluczonych</div>
+  </div>
+  <div class="stat info">
+    <span class="accent"></span>
+    <div class="label">Limit na dzis</div>
+    <div class="value">{{ quota_used|num }} <span class="soft" style="font-size:1rem;font-weight:500">/ {{ quota_limit|num }}</span></div>
+    <div class="meter mt-1">
+      <div class="progress {% if quota_percent > 90 %}bad{% elif quota_percent > 70 %}warn{% endif %}">
+        <span style="width: {{ [quota_percent, 100]|min }}%"></span>
+      </div>
+      <span class="pct">{{ quota_percent }}%</span>
+    </div>
+  </div>
+</div>
+
+<div class="grid side mb-3">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>Postep indeksowania</h2>
+        <p>Liczba zaindeksowanych adresow w ciagu ostatnich 30 dni</p>
+      </div>
+      <div class="spacer"></div>
+      <span class="badge ok"><span class="dot"></span> {{ stats.coverage }}% pokrycia</span>
+    </div>
+    <div class="card-body">
+      <div data-chart='{{ {
+        "type": "area",
+        "height": 240,
+        "labels": history|map(attribute="day")|list,
+        "series": [
+          {"name": "Zaindeksowane", "data": history|map(attribute="indexed")|list, "color": "ok"},
+          {"name": "Poza indeksem", "data": history|map(attribute="not_indexed")|list, "color": "warn", "fill": false}
+        ]
+      }|tojson }}'></div>
+      <div class="chart-legend">
+        <span><i style="background: var(--ok)"></i>Zaindeksowane</span>
+        <span><i style="background: var(--warn)"></i>Poza indeksem</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Status adresow</h2></div>
+    <div class="card-body">
+      <div class="donut-wrap">
+        <div data-chart='{{ {
+          "type": "donut",
+          "size": 160,
+          "caption": "URL-i",
+          "data": [
+            {"label": "Zaindeksowane", "value": stats.INDEXED, "color": "ok"},
+            {"label": "Niezaindeksowane", "value": stats.NOT_INDEXED, "color": "warn"},
+            {"label": "Wykluczone", "value": stats.EXCLUDED, "color": "bad"},
+            {"label": "Nieznane", "value": stats.UNKNOWN, "color": "#9aa0b5"}
+          ]
+        }|tojson }}'></div>
+        <div class="donut-legend">
+          <div class="row"><span class="swatch" style="background:var(--ok)"></span> Zaindeksowane <span class="val">{{ stats.INDEXED|num }}</span></div>
+          <div class="row"><span class="swatch" style="background:var(--warn)"></span> Niezaindeksowane <span class="val">{{ stats.NOT_INDEXED|num }}</span></div>
+          <div class="row"><span class="swatch" style="background:var(--bad)"></span> Wykluczone <span class="val">{{ stats.EXCLUDED|num }}</span></div>
+          <div class="row"><span class="swatch" style="background:#9aa0b5"></span> Niesprawdzone <span class="val">{{ stats.UNKNOWN|num }}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="grid side">
+  <div class="stack">
+    <div class="card">
+      <div class="card-head">
+        <h2>Twoje strony</h2>
+        <div class="spacer"></div>
+        <a href="/sites" class="btn btn-ghost btn-sm">Zarzadzaj {{ icon('external', 14) }}</a>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Strona</th>
+              <th class="num">URL-e</th>
+              <th style="width:180px">Pokrycie</th>
+              <th>Auto</th>
+              <th class="num">Ostatni przebieg</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for row in site_rows %}
+            <tr>
+              <td>
+                <a href="/sites/{{ row.site.id }}" class="strong">{{ row.site.display_name }}</a>
+                <div class="tiny muted">{{ 'Domena' if row.site.is_domain_property else 'Prefiks URL' }}</div>
+              </td>
+              <td class="num">{{ row.total|num }}</td>
+              <td>
+                <div class="meter">
+                  <div class="progress {% if row.coverage >= 80 %}ok{% elif row.coverage >= 40 %}warn{% else %}bad{% endif %}">
+                    <span style="width: {{ row.coverage }}%"></span>
+                  </div>
+                  <span class="pct">{{ row.coverage }}%</span>
+                </div>
+              </td>
+              <td>
+                {% if row.site.auto_index %}
+                  <span class="badge ok"><span class="dot"></span> Wl.</span>
+                {% else %}
+                  <span class="badge">Wyl.</span>
+                {% endif %}
+              </td>
+              <td class="num tiny muted nowrap">{{ row.site.last_index_run_at|ago }}</td>
+              <td class="right">
+                <form method="post" action="/sites/{{ row.site.id }}/run" data-busy style="display:inline">
+                  <button class="btn btn-sm" type="submit">{{ icon('rocket', 14) }} Indeksuj</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>Zgloszenia do wyszukiwarek</h2>
+          <p>Udane i nieudane zgloszenia z ostatnich 30 dni</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div data-chart='{{ {
+          "type": "area",
+          "height": 190,
+          "labels": submissions|map(attribute="day")|list,
+          "series": [
+            {"name": "Udane", "data": submissions|map(attribute="success")|list, "color": "brand"},
+            {"name": "Bledy", "data": submissions|map(attribute="failed")|list, "color": "bad", "fill": false}
+          ]
+        }|tojson }}'></div>
+        <div class="chart-legend">
+          <span><i style="background: var(--brand)"></i>Udane zgloszenia</span>
+          <span><i style="background: var(--bad)"></i>Bledy</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <div class="card-head">
+        <h2>Ostatnie zadania</h2>
+        <div class="spacer"></div>
+        <a href="/history" class="btn btn-ghost btn-sm">Wszystkie</a>
+      </div>
+      <div class="card-body tight">
+        {% if jobs %}
+          <div class="stack" style="gap:10px">
+            {% for job in jobs %}
+              <div class="row" style="gap:9px;align-items:flex-start">
+                <span class="badge {{ job.status|status_tone }}" style="margin-top:2px">{{ job.status|status_label }}</span>
+                <div style="min-width:0;flex:1">
+                  <div class="small truncate" title="{{ job.target }}">{{ job.target|short_url(48) }}</div>
+                  <div class="tiny muted">{{ job.job_type|job_type }} · {{ job.created_at|ago }}</div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted small center" style="padding:20px 0">Brak zadan. Uruchom indeksowanie, aby zobaczyc historie.</p>
+        {% endif %}
+      </div>
+      {% if job_totals.all %}
+      <div class="card-foot row" style="gap:14px">
+        <span class="tiny"><span class="strong">{{ job_totals.SUCCESS|num }}</span> <span class="muted">udanych</span></span>
+        <span class="tiny"><span class="strong">{{ job_totals.FAILED|num }}</span> <span class="muted">bledow</span></span>
+        <span class="tiny"><span class="strong">{{ job_totals.SKIPPED|num }}</span> <span class="muted">pominietych</span></span>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Automatyzacja</h2></div>
+      <div class="card-body">
+        <div class="switch-row">
+          <div class="txt">
+            <strong>Auto-indeksowanie</strong>
+            <span>{{ 'Wlaczone dla tego workspace' if workspace.auto_index_enabled else 'Wylaczone' }}</span>
+          </div>
+          <span class="badge {{ 'ok' if workspace.auto_index_enabled else 'muted' }}">
+            {{ 'Aktywne' if workspace.auto_index_enabled else 'Nieaktywne' }}
+          </span>
+        </div>
+        {% for run in next_runs %}
+          <div class="switch-row">
+            <div class="txt">
+              <strong>
+                {% if run.id == 'auto-index' %}Codzienne indeksowanie
+                {% elif run.id == 'scan-sitemaps' %}Skan sitemap
+                {% else %}Zapis statystyk{% endif %}
+              </strong>
+              <span>Nastepny przebieg: {{ run.next_run[:16]|replace('T', ' ') if run.next_run else 'brak' }}</span>
+            </div>
+            {{ icon('clock', 16) }}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="card-foot">
+        <a href="/settings" class="btn btn-sm btn-block">{{ icon('settings', 14) }} Konfiguruj harmonogram</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}
