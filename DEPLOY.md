@@ -1,15 +1,27 @@
 # Deploy na Hostingerze
 
-## Który plan Hostingera zadziała
+## Potrzebny jest VPS — „Deploy Your Web App” tu nie zadziała
+
+Kreator **Add Website → Node.js web app** (nazywany też „Deploy Your Web App”) obsługuje
+**wyłącznie projekty JavaScriptowe**. Wymaga pliku `package.json` i pozwala wybrać tylko
+frameworki Node — Next.js, Express, Nuxt, Astro, NestJS, Fastify, React i podobne.
+Ten panel jest napisany w Pythonie (FastAPI + uvicorn), więc nie ma tam czego wykryć.
+
+Jeśli zobaczysz komunikat *„This repository is missing a package.json file. Add a
+package.json file to your repo to enable full import, or continue as a static website”* —
+jesteś w złym kreatorze. **Nie wybieraj „continue as a static website”**: tryb statyczny
+tylko serwuje pliki z repozytorium, nie uruchamia Pythona. Dostałbyś stronę pokazującą
+surowy kod zamiast działającego panelu, bez logowania Google, bez bazy i bez harmonogramu.
 
 | Plan | Czy zadziała | Dlaczego |
 |---|---|---|
-| **VPS** | ✅ tak | Pełny dostęp do systemu, Docker, własne porty, procesy w tle |
-| Cloud Hosting | ⚠️ tylko z Docker/SSH | Zależy od wariantu — potrzebny dostęp SSH i możliwość uruchomienia własnego procesu |
+| **VPS** | ✅ tak | Docker, własne porty, procesy w tle — jedyna ścieżka dla tego projektu |
+| Cloud / Business Hosting | ❌ nie | Kreator web app przyjmuje tylko Node.js; Pythona z harmonogramem nie uruchomisz |
 | Web Hosting (shared) | ❌ nie | Brak długo działających procesów Pythona; scheduler i uvicorn nie mają jak działać |
 
 Panel to aplikacja ASGI z wbudowanym harmonogramem działającym w tle, więc potrzebuje
-serwera, na którym proces może żyć nieprzerwanie. **Poniższa instrukcja zakłada VPS.**
+serwera, na którym proces może żyć nieprzerwanie. Właściwe miejsce w hPanel to
+**VPS → Docker Manager**, a nie sekcja Websites. **Cała poniższa instrukcja zakłada VPS.**
 
 ---
 
@@ -139,11 +151,12 @@ Tokena GitHuba nie ustawiasz — do wypchnięcia obrazu workflow używa wbudowan
 
 ---
 
-## Wariant B — Hostinger Docker Manager („Deploy Your Web App”)
+## Wariant B — Hostinger Docker Manager (klikany ręcznie)
 
-To samo co wyżej, tylko klikane ręcznie zamiast z CI. W hPanel → VPS →
-**Docker Manager** wybierz *Compose from URL*, wskaż `docker-compose.yml` z tego
-repozytorium, a zmienne z bloku powyżej wklej w polu **Environment variables**.
+To samo co wyżej, tylko bez CI. W hPanel wejdź w **VPS → zarządzanie serwerem →
+Docker Manager** (nie w *Websites* — tam jest kreator wyłącznie dla Node.js),
+wybierz *Compose from URL*, wskaż `docker-compose.yml` z tego repozytorium,
+a zmienne z bloku powyżej wklej w polu **Environment variables**.
 
 Obowiązują te same dwa warunki: publiczne repo (albo
 [klucz deploy SSH](https://www.hostinger.com/support/how-to-deploy-from-private-github-repository-on-hostinger-docker-manager/))
