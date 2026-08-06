@@ -1,37 +1,69 @@
+# Konfiguracja produkcyjna.
+#
+# Wazne: Hostinger pobiera z repozytorium WYLACZNIE ten jeden plik - nie klonuje
+# calego projektu. Dlatego nie ma tu ani "build: .", ani montowania plikow z dysku
+# hosta. Obraz jest gotowy i pobierany z GitHub Container Registry, a konfiguracja
+# Caddy'ego siedzi w jednej komendzie.
+#
+# Zmienne pochodza z podstawienia Compose:
+#   - Hostinger Docker Manager / GitHub Action wstrzykuja je jako zmienne srodowiskowe,
+#   - przy recznym deployu Compose czyta plik .env z katalogu projektu.
+# Wpisy z ":?" sa wymagane - brak ktoregos zatrzyma deploy z czytelnym komunikatem
+# zamiast wystartowac panel z niedzialajaca konfiguracja.
+#
+# Gdy masz cale repo na dysku (deploy przez SSH, praca lokalna), dolóz nakladke,
+# ktora buduje obraz z Dockerfile i podstawia pelny Caddyfile:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+
 services:
   app:
-    build: .
-    image: indexmeplease:latest
+    image: ghcr.io/goreckis6/indexmenow:${IMAGE_TAG:-latest}
     container_name: indexmeplease
     restart: unless-stopped
-    env_file: .env
+    pull_policy: always
     environment:
       HOST: 0.0.0.0
       PORT: 8006
       DATABASE_URL: sqlite:////app/data/indexmeplease.db
+
+      BASE_URL: "${BASE_URL:?ustaw BASE_URL, np. https://morphyhub.com}"
+      SECRET_KEY: "${SECRET_KEY:?ustaw SECRET_KEY - wygeneruj komenda openssl rand -base64 48}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:?ustaw GOOGLE_CLIENT_ID z Google Cloud Console}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:?ustaw GOOGLE_CLIENT_SECRET}"
+      ALLOWED_EMAILS: "${ALLOWED_EMAILS:-}"
+
+      DEFAULT_DAILY_QUOTA: ${DEFAULT_DAILY_QUOTA:-200}
+      SITEMAP_SCAN_INTERVAL_HOURS: ${SITEMAP_SCAN_INTERVAL_HOURS:-12}
+      AUTO_INDEX_HOUR: ${AUTO_INDEX_HOUR:-3}
+      INSPECTION_BATCH_SIZE: ${INSPECTION_BATCH_SIZE:-50}
+      API_THROTTLE_SECONDS: ${API_THROTTLE_SECONDS:-0.6}
+      RECHECK_AFTER_DAYS: ${RECHECK_AFTER_DAYS:-7}
+      TIMEZONE: ${TIMEZONE:-Europe/Warsaw}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
-      - ./data:/app/data
+      # Nazwany wolumen zamiast katalogu z hosta - baza przezywa przebudowe
+      # kontenera i nie trzeba recznie ustawiac wlasciciela plikow.
+      - indexmeplease_data:/app/data
     expose:
       - "8006"
 
   # Reverse proxy z automatycznym certyfikatem Let's Encrypt.
-  # Ustaw DOMAIN w .env, np. DOMAIN=morphyhub.com
+  # Tryb "caddy reverse-proxy" nie wymaga pliku Caddyfile na serwerze.
   caddy:
     image: caddy:2-alpine
     container_name: indexmeplease-caddy
     restart: unless-stopped
-    environment:
-      DOMAIN: ${DOMAIN}
+    command: caddy reverse-proxy --from "${DOMAIN:?ustaw DOMAIN, np. morphyhub.com}" --to app:8006
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - app
 
 volumes:
+  indexmeplease_data:
   caddy_data:
   caddy_config:

@@ -13,7 +13,150 @@ serwera, na którym proces może żyć nieprzerwanie. **Poniższa instrukcja zak
 
 ---
 
-## Wariant A — Docker Compose (zalecany)
+## Zmienne środowiskowe
+
+To jedyna rzecz, którą trzeba uzupełnić ręcznie — niezależnie od tego, czy wdrażasz
+przez Hostinger Docker Manager, GitHub Action, czy komendą na serwerze.
+`docker-compose.yml` nie czyta pliku `.env` z repozytorium (go tam nie ma), tylko
+podstawia te zmienne.
+
+### Wymagane
+
+| Zmienna | Wartość dla morphyhub.com | Skąd wziąć |
+|---|---|---|
+| `DOMAIN` | `morphyhub.com` | Domena dla certyfikatu Caddy — bez `https://` i bez ukośnika |
+| `BASE_URL` | `https://morphyhub.com` | Pełny adres panelu. **Musi być `https`** i identyczny z redirect URI w Google |
+| `SECRET_KEY` | losowy ciąg | `openssl rand -base64 48` |
+| `GOOGLE_CLIENT_ID` | `...apps.googleusercontent.com` | Google Cloud Console → Credentials |
+| `GOOGLE_CLIENT_SECRET` | `GOCSPX-...` | jw. |
+
+Brak którejkolwiek z nich zatrzyma deploy z komunikatem wskazującym, czego brakuje —
+lepsze to niż panel, który wstaje z niedziałającym logowaniem.
+
+### Zalecane
+
+| Zmienna | Wartość | Po co |
+|---|---|---|
+| `ALLOWED_EMAILS` | `slavomir.gorecki@gmail.com` | Bez tego każdy z kontem Google założy konto w Twoim panelu |
+| `TIMEZONE` | `Europe/Warsaw` | VPS domyślnie chodzi na UTC, więc harmonogram ruszyłby o innej godzinie |
+
+### Opcjonalne (mają sensowne wartości domyślne)
+
+`AUTO_INDEX_HOUR` (3), `DEFAULT_DAILY_QUOTA` (200), `SITEMAP_SCAN_INTERVAL_HOURS` (12),
+`INSPECTION_BATCH_SIZE` (50), `API_THROTTLE_SECONDS` (0.6), `RECHECK_AFTER_DAYS` (7),
+`LOG_LEVEL` (INFO).
+
+`IMAGE_TAG` (domyślnie `latest`) wskazuje wersję obrazu z GHCR. Każdy build taguje
+obraz również skrótem commita, więc ustawiając tu konkretny SHA wracasz do
+poprzedniej wersji bez cofania zmian w repozytorium.
+
+### Czego NIE ustawiać
+
+`HOST`, `PORT` i `DATABASE_URL` są na stałe wpisane w `docker-compose.yml`.
+Nadpisanie ich rozjedzie konfigurację z reverse proxy albo odetnie panel od bazy.
+
+### Gotowy blok do wklejenia
+
+```
+DOMAIN=morphyhub.com
+BASE_URL=https://morphyhub.com
+SECRET_KEY=TUTAJ_WYNIK_openssl_rand_base64_48
+GOOGLE_CLIENT_ID=TUTAJ_CLIENT_ID
+GOOGLE_CLIENT_SECRET=TUTAJ_CLIENT_SECRET
+ALLOWED_EMAILS=slavomir.gorecki@gmail.com
+TIMEZONE=Europe/Warsaw
+```
+
+---
+
+## Wariant A — GitHub Action (deploy po każdym push) ← zalecany
+
+Workflow `.github/workflows/deploy.yml` robi dwie rzeczy przy każdym pushu na `main`:
+
+1. **buduje obraz Dockera** i wypycha go do GitHub Container Registry jako
+   `ghcr.io/goreckis6/indexmenow:latest`,
+2. **woła API Hostingera**, które pobiera `docker-compose.yml` i restartuje projekt
+   na świeżym obrazie.
+
+Krok 2 jest pomijany, dopóki nie ustawisz zmiennej `HOSTINGER_VM_ID` — więc build
+możesz przetestować, zanim w ogóle dotkniesz Hostingera.
+
+### Jak działa deploy (i co z tego wynika)
+
+Akcja Hostingera **nie klonuje repozytorium**. Wysyła do API tylko adres URL do
+jednego pliku: `https://github.com/<repo>/blob/<sha>/docker-compose.yml`. Serwer
+Hostingera pobiera ten plik i uruchamia go u siebie. Stąd trzy konsekwencje, które
+łatwo przeoczyć:
+
+**Repozytorium musi być publiczne.** Hostinger pobiera plik compose bez logowania,
+więc przy prywatnym repo dostanie 404 i deploy padnie. Jeśli kod ma zostać prywatny,
+użyj wariantu C (ręczny `git clone` przez SSH). Sam plik compose nie zawiera sekretów
+— wszystkie hasła wchodzą zmiennymi środowiskowymi.
+
+**Paczka w GHCR musi być publiczna.** Po pierwszym udanym buildzie wejdź w profil
+GitHuba → *Packages* → `indexmenow` → *Package settings* → *Change visibility* →
+**Public**. Inaczej VPS nie pobierze obrazu, bo nie ma gdzie się zalogować. Obraz
+zawiera wyłącznie kod aplikacji, konfiguracja dochodzi z zewnątrz.
+
+**W `docker-compose.yml` nie ma `build:` ani plików montowanych z dysku hosta.**
+Na serwerze istnieje tylko ten jeden plik YAML, więc nie ma czego budować ani co
+montować. Dlatego obraz jest gotowy z rejestru, a Caddy dostaje konfigurację jedną
+komendą (`caddy reverse-proxy`) zamiast pliku `Caddyfile`. Jeśli będziesz edytować
+ten plik, nie dodawaj do niego ścieżek typu `./coś` — deploy przestanie działać.
+
+### Konfiguracja w GitHubie
+
+*Settings → Secrets and variables → Actions*:
+
+**Zakładka Secrets** (wartości ukryte):
+
+| Nazwa | Wartość |
+|---|---|
+| `HOSTINGER_API_KEY` | Token API z hPanel → *Account → API* |
+| `SECRET_KEY` | Wynik `openssl rand -base64 48` |
+| `GOOGLE_CLIENT_ID` | Z Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | Z Google Cloud Console |
+
+**Zakładka Variables** (wartości jawne):
+
+| Nazwa | Wartość |
+|---|---|
+| `HOSTINGER_VM_ID` | ID maszyny — widoczne w adresie URL panelu VPS |
+| `DOMAIN` | `morphyhub.com` |
+| `BASE_URL` | `https://morphyhub.com` |
+| `ALLOWED_EMAILS` | `slavomir.gorecki@gmail.com` |
+
+Tokena GitHuba nie ustawiasz — do wypchnięcia obrazu workflow używa wbudowanego
+`GITHUB_TOKEN`.
+
+### Kolejność uruchamiania
+
+1. Rekord A w Cloudflare (patrz wariant C, punkt 1) — **przed** pierwszym deployem.
+   Caddy sięga po certyfikat zaraz po starcie i bez DNS-u dostanie błąd.
+2. VPS z szablonem zawierającym Dockera.
+3. Sekrety i zmienne jak wyżej.
+4. Push na `main` albo *Actions → Build i deploy na Hostinger VPS → Run workflow*.
+
+---
+
+## Wariant B — Hostinger Docker Manager („Deploy Your Web App”)
+
+To samo co wyżej, tylko klikane ręcznie zamiast z CI. W hPanel → VPS →
+**Docker Manager** wybierz *Compose from URL*, wskaż `docker-compose.yml` z tego
+repozytorium, a zmienne z bloku powyżej wklej w polu **Environment variables**.
+
+Obowiązują te same dwa warunki: publiczne repo (albo
+[klucz deploy SSH](https://www.hostinger.com/support/how-to-deploy-from-private-github-repository-on-hostinger-docker-manager/))
+i publiczna paczka w GHCR. Obraz musi już tam być, więc najpierw pozwól workflow
+zbudować go choć raz.
+
+Alternatywnie zamiast *Compose from URL* możesz wkleić zawartość
+`docker-compose.yml` bezpośrednio w edytorze — wtedy repo może zostać prywatne,
+ale każdą zmianę w pliku trzeba przenieść ręcznie.
+
+---
+
+## Wariant C — ręcznie przez SSH
 
 Jedna komenda stawia aplikację i reverse proxy Caddy, który sam pobiera i odnawia
 certyfikat HTTPS od Let's Encrypt.
@@ -27,7 +170,6 @@ Domena korzysta z nameserverów Cloudflare (`sonny.ns.cloudflare.com`,
 | Typ | Nazwa | Wartość | Proxy |
 |---|---|---|---|
 | A | `@` | IP Twojego VPS-a | **DNS only** (szara chmurka) |
-| A | `www` | IP Twojego VPS-a | **DNS only** |
 
 > **Ustaw najpierw „DNS only”.** Przy włączonym proxy (pomarańczowa chmurka)
 > Caddy nie dostanie certyfikatu Let's Encrypt, bo ruch na porcie 80 nie dociera
@@ -40,9 +182,10 @@ Sprawdzenie propagacji:
 dig +short morphyhub.com @1.1.1.1
 ```
 
-Jeśli nie chcesz obsługiwać `www`, pomiń ten rekord i usuń blok `www.{$DOMAIN}`
-z pliku `deploy/Caddyfile` — inaczej Caddy będzie bezskutecznie próbował pobrać
-dla niego certyfikat.
+Rekord dla `www` dodaj tylko przy wariancie C — tam Caddy czyta `deploy/Caddyfile`,
+w którym jest przekierowanie `www` → domena główna. Warianty A i B obsługują samą
+domenę główną, więc rekord `www` wskazywałby na serwer, który nie ma dla niego
+certyfikatu.
 
 ### 2. Serwer
 
@@ -86,20 +229,20 @@ openssl rand -base64 48
 > `SECRET_KEY` szyfruje tokeny Google w bazie. Zmiana klucza po uruchomieniu
 > unieważnia zapisane tokeny i trzeba zalogować się ponownie. Nie trzymaj go w repo.
 
-### 4. Uprawnienia do katalogu z bazą
-
-Kontener działa jako użytkownik o UID 1000, więc katalog na bazę musi do niego należeć:
+### 4. Start
 
 ```bash
-mkdir -p data && sudo chown -R 1000:1000 data
-```
-
-### 5. Start
-
-```bash
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 docker compose logs -f app
 ```
+
+Nakładka `docker-compose.local.yml` jest tu istotna: buduje obraz z `Dockerfile`
+zamiast pobierać go z GHCR i podstawia pełny `deploy/Caddyfile` (przekierowanie
+`www`, nagłówki bezpieczeństwa, logi dostępu). Bez niej dostaniesz dokładnie tę
+samą konfigurację, co przy deployu zarządzanym przez Hostingera.
+
+Baza siedzi na nazwanym wolumenie Dockera, więc nie trzeba nic robić z uprawnieniami
+katalogu na hoście ani pamiętać o `chown`.
 
 Panel będzie pod `https://morphyhub.com`. Caddy wystawi certyfikat przy pierwszym
 żądaniu — jeśli się nie pobiera, sprawdź, czy porty 80 i 443 są otwarte, czy rekord A
@@ -111,7 +254,7 @@ Podgląd postępu wystawiania certyfikatu:
 docker compose logs -f caddy
 ```
 
-### 6. Redirect URI w Google
+### 5. Redirect URI w Google
 
 W [Google Cloud Console](https://console.cloud.google.com/apis/credentials) dopisz
 do swojego OAuth client ID oba adresy:
@@ -122,8 +265,8 @@ http://192.168.1.40:8006/auth/callback
 ```
 
 Google pozwala na wiele adresów, więc panel będzie działał równolegle w domu
-i na serwerze. Jeśli dodasz też rekord `www`, dopisz `https://www.morphyhub.com/auth/callback`
-albo po prostu zawsze wchodź na wersję bez `www` (Caddy i tak tam przekierowuje).
+i na serwerze. Adresu z `www` nie trzeba dopisywać — logowanie zawsze startuje
+z `BASE_URL`, czyli z wersji bez `www`.
 
 Do listy **Authorized JavaScript origins** nie musisz nic dodawać — panel nie
 uruchamia logowania po stronie przeglądarki.
@@ -133,22 +276,22 @@ uruchamia logowania po stronie przeglądarki.
 ```bash
 cd /opt/indexmenow
 git pull
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
 ### Backup
 
-Cała baza to jeden plik. Kopia i przywracanie:
+Cała baza to jeden plik na wolumenie Dockera. Kopia:
 
 ```bash
 docker compose stop app
-tar czf ~/indexmenow-backup-$(date +%F).tar.gz data/
+docker compose cp app:/app/data ./backup-$(date +%F)
 docker compose start app
 ```
 
 ---
 
-## Wariant B — bez Dockera (systemd + nginx)
+## Wariant D — bez Dockera (systemd + nginx)
 
 Gdy wolisz uruchomić aplikację bezpośrednio w systemie.
 

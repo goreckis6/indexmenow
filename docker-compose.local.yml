@@ -1,0 +1,24 @@
+# Nakladka na docker-compose.yml dla sytuacji, gdy cale repozytorium lezy na dysku
+# serwera (wariant "recznie przez SSH") albo na wlasnej maszynie.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#
+# Daje dwie rzeczy, ktorych nie da sie zrobic przy deployu zarzadzanym przez
+# Hostingera, bo tam na serwerze istnieje wylacznie plik docker-compose.yml:
+#   - obraz budowany lokalnie z Dockerfile zamiast pobierania z GHCR,
+#   - pelny Caddyfile (przekierowanie www, naglowki bezpieczenstwa, logi dostepu)
+#     zamiast jednolinijkowego "caddy reverse-proxy".
+
+services:
+  app:
+    build: .
+    image: indexmeplease:local
+    pull_policy: build
+
+  caddy:
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    environment:
+      # Caddyfile odwoluje sie do tej zmiennej przez {$DOMAIN}.
+      DOMAIN: "${DOMAIN:?ustaw DOMAIN, np. morphyhub.com}"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
