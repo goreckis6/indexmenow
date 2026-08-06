@@ -1,3 +1,10 @@
+# Przekierowanie www -> domena glowna.
+# Usun ten blok, jesli nie masz rekordu A dla www (Caddy probowalby
+# bezskutecznie pobrac dla niego certyfikat).
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
+
 {$DOMAIN} {
 	encode gzip zstd
 

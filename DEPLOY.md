@@ -18,14 +18,31 @@ serwera, na którym proces może żyć nieprzerwanie. **Poniższa instrukcja zak
 Jedna komenda stawia aplikację i reverse proxy Caddy, który sam pobiera i odnawia
 certyfikat HTTPS od Let's Encrypt.
 
-### 1. Domena
+### 1. Domena (`morphyhub.com` — DNS w Cloudflare)
 
-W panelu DNS ustaw rekord **A** dla subdomeny, np. `index.twojadomena.pl`,
-wskazujący na adres IP Twojego VPS-a. Poczekaj, aż się rozpropaguje:
+Domena korzysta z nameserverów Cloudflare (`sonny.ns.cloudflare.com`,
+`priscilla.ns.cloudflare.com`) i nie ma jeszcze rekordu A. W panelu Cloudflare
+→ *DNS → Records* dodaj:
+
+| Typ | Nazwa | Wartość | Proxy |
+|---|---|---|---|
+| A | `@` | IP Twojego VPS-a | **DNS only** (szara chmurka) |
+| A | `www` | IP Twojego VPS-a | **DNS only** |
+
+> **Ustaw najpierw „DNS only”.** Przy włączonym proxy (pomarańczowa chmurka)
+> Caddy nie dostanie certyfikatu Let's Encrypt, bo ruch na porcie 80 nie dociera
+> bezpośrednio do serwera. Proxy możesz włączyć później — patrz sekcja
+> *Cloudflare proxy* na końcu tego dokumentu.
+
+Sprawdzenie propagacji:
 
 ```bash
-dig +short index.twojadomena.pl
+dig +short morphyhub.com @1.1.1.1
 ```
+
+Jeśli nie chcesz obsługiwać `www`, pomiń ten rekord i usuń blok `www.{$DOMAIN}`
+z pliku `deploy/Caddyfile` — inaczej Caddy będzie bezskutecznie próbował pobrać
+dla niego certyfikat.
 
 ### 2. Serwer
 
@@ -48,13 +65,17 @@ nano .env
 Uzupełnij w `.env`:
 
 ```ini
-BASE_URL=https://index.twojadomena.pl
-DOMAIN=index.twojadomena.pl
+BASE_URL=https://morphyhub.com
+DOMAIN=morphyhub.com
 SECRET_KEY=<wynik komendy ponizej>
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
-ALLOWED_EMAILS=twoj.adres@gmail.com
+ALLOWED_EMAILS=slavomir.gorecki@gmail.com
 ```
+
+> `BASE_URL` musi być z `https://`, nie `http://`. Google odrzuca redirect URI
+> po zwykłym HTTP dla wszystkiego poza `localhost`, a aplikacja przy `https`
+> automatycznie przełącza ciasteczko sesji w tryb `Secure`.
 
 Wygenerowanie klucza:
 
@@ -80,21 +101,32 @@ docker compose up -d --build
 docker compose logs -f app
 ```
 
-Panel będzie pod `https://index.twojadomena.pl`. Caddy wystawi certyfikat przy
-pierwszym żądaniu — jeśli certyfikat się nie pobiera, sprawdź, czy porty 80 i 443
-są otwarte i czy rekord A wskazuje na ten serwer.
+Panel będzie pod `https://morphyhub.com`. Caddy wystawi certyfikat przy pierwszym
+żądaniu — jeśli się nie pobiera, sprawdź, czy porty 80 i 443 są otwarte, czy rekord A
+wskazuje na ten serwer i czy proxy Cloudflare jest wyłączone.
+
+Podgląd postępu wystawiania certyfikatu:
+
+```bash
+docker compose logs -f caddy
+```
 
 ### 6. Redirect URI w Google
 
 W [Google Cloud Console](https://console.cloud.google.com/apis/credentials) dopisz
-do swojego OAuth client ID:
+do swojego OAuth client ID oba adresy:
 
 ```
-https://index.twojadomena.pl/auth/callback
+https://morphyhub.com/auth/callback
+http://192.168.1.40:8006/auth/callback
 ```
 
-Możesz zostawić równolegle wpis lokalny `http://192.168.1.40:8006/auth/callback` —
-Google pozwala na wiele adresów, więc panel będzie działał i w domu, i na serwerze.
+Google pozwala na wiele adresów, więc panel będzie działał równolegle w domu
+i na serwerze. Jeśli dodasz też rekord `www`, dopisz `https://www.morphyhub.com/auth/callback`
+albo po prostu zawsze wchodź na wersję bez `www` (Caddy i tak tam przekierowuje).
+
+Do listy **Authorized JavaScript origins** nie musisz nic dodawać — panel nie
+uruchamia logowania po stronie przeglądarki.
 
 ### Aktualizacja po zmianach w repo
 
@@ -164,7 +196,7 @@ nginx — `/etc/nginx/sites-available/indexmenow`:
 ```nginx
 server {
     listen 80;
-    server_name index.twojadomena.pl;
+    server_name morphyhub.com www.morphyhub.com;
 
     location / {
         proxy_pass http://127.0.0.1:8006;
@@ -181,7 +213,7 @@ server {
 sudo ln -s /etc/nginx/sites-available/indexmenow /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d index.twojadomena.pl
+sudo certbot --nginx -d morphyhub.com -d www.morphyhub.com
 ```
 
 ---
@@ -206,3 +238,35 @@ auto-indeksowanie. Serwery VPS domyślnie chodzą na UTC.
 **Limity API zostają te same.** 200 zgłoszeń dziennie na projekt Google Cloud —
 przeniesienie na serwer tego nie zmienia. Więcej daje dodanie kont serwisowych
 w kolejnych projektach (Ustawienia → Konta serwisowe).
+
+**Porty na VPS-ie.** Muszą być otwarte 80 i 443. Na Ubuntu z ufw:
+
+```bash
+sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw reload
+```
+
+Port 8006 zostaw zamknięty — aplikacja jest widoczna tylko dla kontenera Caddy.
+
+---
+
+## Cloudflare proxy (opcjonalnie, po pierwszym uruchomieniu)
+
+Gdy panel już działa na `https://morphyhub.com` z certyfikatem od Caddy, możesz
+włączyć proxy Cloudflare (pomarańczowa chmurka), żeby ukryć IP serwera i dostać
+ochronę przed botami.
+
+Warunek: w Cloudflare → *SSL/TLS → Overview* ustaw tryb **Full (strict)**.
+
+- Tryb **Flexible** spowoduje pętlę przekierowań — Cloudflare łączy się z serwerem
+  po HTTP, a Caddy odsyła z powrotem na HTTPS.
+- Tryb **Full (strict)** działa, bo Caddy ma prawdziwy certyfikat Let's Encrypt.
+
+Po włączeniu proxy Caddy nie odnowi już certyfikatu metodą HTTP-01 (ruch na porcie 80
+nie dochodzi bezpośrednio). Masz dwie opcje:
+
+1. Na czas odnowienia (co ~60 dni) przełączyć rekord na *DNS only*, albo
+2. Włączyć w Cloudflare **Origin Server Certificate** i wskazać go Caddy'emu,
+   albo skonfigurować w Caddy wyzwanie DNS-01 z tokenem API Cloudflare.
+
+Najprostsze i w zupełności wystarczające dla panelu używanego przez jedną osobę:
+**zostawić DNS only**. Wtedy nic nie wymaga obsługi ręcznej.

@@ -15,7 +15,7 @@ services:
       - "8006"
 
   # Reverse proxy z automatycznym certyfikatem Let's Encrypt.
-  # Ustaw DOMAIN w .env, np. DOMAIN=index.twojadomena.pl
+  # Ustaw DOMAIN w .env, np. DOMAIN=morphyhub.com
   caddy:
     image: caddy:2-alpine
     container_name: indexmeplease-caddy
