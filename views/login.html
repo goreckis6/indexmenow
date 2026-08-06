@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Logowanie — {{ app_name }}</title>
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script>(function(){var t=localStorage.getItem("imp-theme");if(t)document.documentElement.setAttribute("data-theme",t);})();</script>
+</head>
+<body>
+{% from "partials/icons.html" import icon %}
+
+<div class="flash-stack">
+  {% for flash in flashes %}
+    <div class="flash {{ flash.category }}">
+      <div style="flex:1">{{ flash.message }}</div>
+      <button type="button" aria-label="Zamknij">&times;</button>
+    </div>
+  {% endfor %}
+</div>
+
+<div class="auth-wrap">
+  <section class="auth-panel">
+    <div class="auth-card">
+      <a href="/" class="brand" style="padding-left:0;margin-bottom:28px">
+        <span class="brand-mark">I</span>
+        <span>IndexMePlease<small>panel indeksowania</small></span>
+      </a>
+
+      <h1 style="font-size:1.75rem;margin-bottom:8px">Zaloguj sie</h1>
+      <p class="soft mb-3">
+        Uzyj konta Google powiazanego z Google Search Console. Panel poprosi o dostep
+        do Search Console i Indexing API, zeby moc zglaszac Twoje adresy do indeksowania.
+      </p>
+
+      {% if google_configured %}
+        <a href="/auth/google?next={{ next|urlencode }}" class="btn btn-google btn-block">
+          {{ icon('google', 20) }} Kontynuuj z Google
+        </a>
+        <div class="divider"></div>
+        <div class="callout">
+          {{ icon('shield') }}
+          <div>
+            Tokeny sa szyfrowane i zapisywane lokalnie w bazie SQLite na tym komputerze.
+            Nic nie jest wysylane do zewnetrznych serwerow poza API Google.
+          </div>
+        </div>
+      {% else %}
+        <div class="callout bad mb-2">
+          {{ icon('alert') }}
+          <div>
+            <strong>Brak konfiguracji OAuth.</strong>
+            Uzupelnij <code>GOOGLE_CLIENT_ID</code> i <code>GOOGLE_CLIENT_SECRET</code>
+            w pliku <code>.env</code>, a nastepnie zrestartuj aplikacje.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Jak to skonfigurowac</h3></div>
+          <div class="card-body small stack">
+            <div>1. Wejdz na <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console → Credentials</a>.</div>
+            <div>2. Utworz <strong>OAuth client ID</strong> typu <em>Web application</em>.</div>
+            <div>3. W polu <strong>Authorized redirect URIs</strong> wpisz dokladnie:</div>
+            <div class="code-block">{{ redirect_uri }}</div>
+            <div>4. Wlacz API: <em>Google Search Console API</em>, <em>Indexing API</em>.</div>
+            <div>5. Skopiuj Client ID i Secret do pliku <code>.env</code> i uruchom ponownie.</div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="auth-hero">
+    <h2>Twoje strony w Google — szybciej niz zwykle.</h2>
+    <p>
+      Panel monitoruje sitemapy, sprawdza status indeksowania kazdego adresu
+      i automatycznie zglasza te, ktorych Google jeszcze nie zna.
+    </p>
+    <ul>
+      <li>{{ icon('check', 19) }} <span>Import wszystkich wlasciwosci z Search Console jednym kliknieciem</span></li>
+      <li>{{ icon('check', 19) }} <span>Codzienny skan sitemap i wykrywanie nowych podstron</span></li>
+      <li>{{ icon('check', 19) }} <span>Inspekcja URL-i: dowiedz sie dokladnie, czego Google nie zaindeksowal</span></li>
+      <li>{{ icon('check', 19) }} <span>Masowe zgloszenia przez Google Indexing API</span></li>
+      <li>{{ icon('check', 19) }} <span>IndexNow dla Bing, Yandex i Seznam</span></li>
+      <li>{{ icon('check', 19) }} <span>Historia zadan, wykresy pokrycia i limity dzienne</span></li>
+    </ul>
+  </section>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

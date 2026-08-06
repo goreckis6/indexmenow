@@ -1,17 +1,37 @@
-# IndexMePlease
+# IndexMeNow
 
-Panel do przyspieszania indeksowania stron w wyszukiwarkach — odpowiednik IndexPlease,
-działający w całości na Twoim komputerze. Logowanie kontem Google, integracja z Google
-Search Console, Google Indexing API oraz IndexNow (Bing, Yandex, Seznam, Naver).
+Panel do przyspieszania indeksowania stron w wyszukiwarkach. Logowanie kontem Google,
+integracja z Google Search Console, Google Indexing API oraz IndexNow (Bing, Yandex,
+Seznam, Naver).
 
-Dane trzymane są lokalnie w SQLite, tokeny Google są szyfrowane, a panel wystawiasz
-w sieci domowej pod adresem typu `http://192.168.1.50:8006`.
+**Stack produkcyjny:** Node.js (Express) + MySQL + Nunjucks.  
+Dane w MySQL, tokeny Google szyfrowane AES-256-GCM, deploy na Hostingerze przez
+**Node.js Web App** (push na GitHub).
 
-> Uruchomienie na serwerze (Hostinger VPS, Docker + HTTPS) opisuje **[DEPLOY.md](DEPLOY.md)**.
+> Deploy opisuje **[DEPLOY.md](DEPLOY.md)**.
+
+Katalog `app/` to wcześniejsza wersja w Pythonie (FastAPI + SQLite) — nie jest używana
+przez `npm start`. Aktywny kod leży w `src/`, szablony w `views/`, statyki w `public/`.
+
+---
+
+## Szybki start (Node)
+
+```powershell
+cd C:\Users\admin_test\indexmeplease
+cp .env.example .env
+# uzupelnij DB_* oraz GOOGLE_CLIENT_*
+npm install
+npm run migrate
+npm run dev
+```
+
+Panel: adres z `BASE_URL` (domyślnie `http://localhost:8006`).
 
 ---
 
 ## Co potrafi
+
 
 | Funkcja | Opis |
 |---|---|

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blad {{ status_code }} — {{ app_name }}</title>
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script>(function(){var t=localStorage.getItem("imp-theme");if(t)document.documentElement.setAttribute("data-theme",t);})();</script>
+</head>
+<body>
+<div style="min-height:100vh;display:grid;place-items:center;padding:24px">
+  <div class="card" style="max-width:480px;width:100%">
+    <div class="empty">
+      <div class="icon" style="font-size:1.3rem;font-weight:800;color:var(--bad);background:var(--bad-soft)">{{ status_code }}</div>
+      <h3>Cos poszlo nie tak</h3>
+      <p>{{ detail or 'Wystapil nieoczekiwany blad.' }}</p>
+      <div class="btn-row" style="justify-content:center">
+        <a class="btn btn-primary" href="/">Pulpit</a>
+        <a class="btn" href="javascript:history.back()">Wroc</a>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,431 @@
+﻿{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+
+{% block title %}{{ site.display_name }} — {{ app_name }}{% endblock %}
+{% block page_title %}{{ site.display_name }}{% endblock %}
+{% block page_subtitle %}
+  <div class="topbar-sub">
+    <a href="{{ site.home_url }}" target="_blank" rel="noopener">{{ site.property_url }}</a>
+    · limit dzienny {{ site.daily_limit }} · pozostalo {{ quota_left }} zgloszen
+  </div>
+{% endblock %}
+
+{% block topbar_actions %}
+  <form method="post" action="/sites/{{ site.id }}/run" data-busy style="display:inline">
+    <input type="hidden" name="scan" value="true">
+    <button class="btn btn-primary btn-sm" type="submit">{{ icon('rocket', 15) }} Uruchom indeksowanie</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+
+<div class="tabs">
+  <a class="tab {% if tab == 'overview' %}active{% endif %}" href="/sites/{{ site.id }}?tab=overview">Przeglad</a>
+  <a class="tab {% if tab == 'urls' %}active{% endif %}" href="/sites/{{ site.id }}?tab=urls">Adresy URL <span class="muted">({{ stats.total }})</span></a>
+  <a class="tab {% if tab == 'sitemaps' %}active{% endif %}" href="/sites/{{ site.id }}?tab=sitemaps">Sitemapy <span class="muted">({{ sitemaps|length }})</span></a>
+  <a class="tab {% if tab == 'jobs' %}active{% endif %}" href="/sites/{{ site.id }}?tab=jobs">Zadania</a>
+  <a class="tab {% if tab == 'settings' %}active{% endif %}" href="/sites/{{ site.id }}?tab=settings">Ustawienia</a>
+</div>
+
+{# ------------------------------------------------------------- PRZEGLAD #}
+{% if tab == 'overview' %}
+
+<div class="grid cols-4 mb-3">
+  <div class="stat"><span class="accent"></span><div class="label">Znane URL-e</div><div class="value">{{ stats.total|num }}</div><div class="sub">z sitemap i dodane recznie</div></div>
+  <div class="stat ok"><span class="accent"></span><div class="label">Zaindeksowane</div><div class="value">{{ stats.INDEXED|num }}</div><div class="sub">pokrycie {{ stats.coverage }}%</div></div>
+  <div class="stat warn"><span class="accent"></span><div class="label">Do zgloszenia</div><div class="value">{{ stats.NOT_INDEXED|num }}</div><div class="sub">{{ stats.UNKNOWN|num }} jeszcze niesprawdzonych</div></div>
+  <div class="stat bad"><span class="accent"></span><div class="label">Wykluczone</div><div class="value">{{ stats.EXCLUDED|num }}</div><div class="sub">noindex, duplikaty, przekierowania</div></div>
+</div>
+
+<div class="grid side">
+  <div class="card">
+    <div class="card-head"><h2>Historia indeksowania</h2></div>
+    <div class="card-body">
+      <div data-chart='{{ {
+        "type": "area",
+        "height": 230,
+        "labels": history|attr_list("day"),
+        "series": [{"name": "Zaindeksowane", "data": history|attr_list("indexed"), "color": "ok"}]
+      }|tojson }}'></div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <div class="card-head"><h2>Szybkie akcje</h2></div>
+      <div class="card-body stack" style="gap:9px">
+        <form method="post" action="/sites/{{ site.id }}/scan" data-busy>
+          <button class="btn btn-block" type="submit">{{ icon('sitemap', 15) }} Skanuj sitemapy</button>
+        </form>
+        <form method="post" action="/sites/{{ site.id }}/inspect" data-busy>
+          <input type="hidden" name="limit" value="50">
+          <button class="btn btn-block" type="submit">{{ icon('search', 15) }} Sprawdz 50 URL-i w Google</button>
+        </form>
+        <form method="post" action="/sites/{{ site.id }}/run" data-busy>
+          <input type="hidden" name="scan" value="false">
+          <button class="btn btn-primary btn-block" type="submit">{{ icon('zap', 15) }} Zglos niezaindeksowane</button>
+        </form>
+        <a class="btn btn-block" href="/urls/export.csv?site_id={{ site.id }}">{{ icon('download', 15) }} Eksport CSV</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Informacje</h2></div>
+      <div class="card-body">
+        <div class="switch-row"><div class="txt"><strong>Typ wlasciwosci</strong><span>{{ 'Domena (sc-domain)' if site.is_domain_property else 'Prefiks URL' }}</span></div></div>
+        <div class="switch-row"><div class="txt"><strong>Uprawnienia</strong><span>{{ site.permission_level or 'nieznane' }}</span></div></div>
+        <div class="switch-row"><div class="txt"><strong>Ostatni skan sitemap</strong><span>{{ site.last_scan_at|ago }}</span></div></div>
+        <div class="switch-row"><div class="txt"><strong>Ostatnie indeksowanie</strong><span>{{ site.last_index_run_at|ago }}</span></div></div>
+        <div class="switch-row"><div class="txt"><strong>Auto-indeksowanie</strong><span>{{ ('wlaczone, ' + site.daily_limit + ' URL-i dziennie') if site.auto_index else 'wylaczone' }}</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ----------------------------------------------------------------- URLE #}
+{% elif tab == 'urls' %}
+
+<div class="card mb-3">
+  <div class="card-head">
+    <div><h2>Dodaj adresy URL</h2><p>Wklej liste adresow (jeden na linie) albo wgraj plik TXT/CSV</p></div>
+  </div>
+  <div class="card-body">
+    <form method="post" action="/urls/add" enctype="multipart/form-data" data-busy>
+      <input type="hidden" name="site_id" value="{{ site.id }}">
+      <div class="field">
+        <textarea class="textarea" name="urls_blob" data-url-counter="#url-count"
+                  placeholder="{{ site.home_url }}strona-1&#10;{{ site.home_url }}blog/wpis&#10;{{ site.home_url }}kontakt"></textarea>
+        <div class="hint">Wykryte adresy: <strong id="url-count">0</strong> · Adresy spoza domeny zostana odrzucone.</div>
+      </div>
+      <div class="form-row three">
+        <div class="field">
+          <label class="lbl">Plik z lista URL-i</label>
+          <input class="input" type="file" name="file" accept=".txt,.csv">
+        </div>
+        <div class="field">
+          <label class="lbl">Priorytet</label>
+          <select class="select" name="priority">
+            <option value="0">Normalny</option>
+            <option value="10">Wysoki — zglos w pierwszej kolejnosci</option>
+          </select>
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end;gap:10px">
+          <label class="switch"><input type="checkbox" name="submit_now" value="true"><span class="track"></span></label>
+          <span class="small">Zglos od razu do Google</span>
+        </div>
+      </div>
+      <button class="btn btn-primary" type="submit">{{ icon('plus', 16) }} Dodaj adresy</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Adresy ({{ total_urls|num }})</h2>
+    <div class="spacer"></div>
+    <form method="get" action="/sites/{{ site.id }}" class="filters">
+      <input type="hidden" name="tab" value="urls">
+      <input class="input" style="width:200px" type="search" name="q" value="{{ query }}" placeholder="Szukaj w adresach…">
+      <select class="select" style="width:180px" name="status" onchange="this.form.submit()">
+        <option value="">Wszystkie statusy</option>
+        {% for s in ['INDEXED', 'NOT_INDEXED', 'EXCLUDED', 'UNKNOWN', 'ERROR'] %}
+          <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s|status_label }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-sm" type="submit">{{ icon('search', 14) }}</button>
+    </form>
+  </div>
+
+  <form method="post" action="/urls/action" id="url-form">
+    <input type="hidden" name="redirect_to" value="/sites/{{ site.id }}?tab=urls">
+    <div class="bulk-bar hidden" data-bulk-bar>
+      <strong><span data-bulk-count>0</span> zaznaczonych</strong>
+      <div class="spacer" style="flex:1"></div>
+      <button class="btn btn-sm btn-primary" type="submit" name="action" value="submit">{{ icon('zap', 14) }} Zglos do Google</button>
+      <button class="btn btn-sm" type="submit" name="action" value="inspect">{{ icon('search', 14) }} Sprawdz status</button>
+      <button class="btn btn-sm" type="submit" name="action" value="priority">{{ icon('rocket', 14) }} Wysoki priorytet</button>
+      <button class="btn btn-sm btn-danger" type="submit" name="action" value="delete"
+              onclick="return confirm('Usunac zaznaczone adresy z panelu?')">{{ icon('trash', 14) }} Usun</button>
+    </div>
+
+    <div class="table-wrap" id="url-table">
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="checkbox-col"><input type="checkbox" data-select-all="#url-table" aria-label="Zaznacz wszystkie"></th>
+            <th>Adres</th>
+            <th>Status</th>
+            <th>Szczegoly Google</th>
+            <th class="nowrap">Sprawdzony</th>
+            <th class="nowrap">Zgloszony</th>
+            <th class="num">Zgl.</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for page in urls %}
+          <tr>
+            <td><input type="checkbox" name="url_ids" value="{{ page.id }}"></td>
+            <td class="url-cell">
+              <a href="{{ page.url }}" target="_blank" rel="noopener" title="{{ page.url }}">{{ page.url|short_url(70) }}</a>
+              {% if page.priority > 0 %}<span class="badge brand tiny">priorytet</span>{% endif %}
+            </td>
+            <td><span class="badge {{ page.index_status|status_tone }}">{{ page.index_status|status_label }}</span></td>
+            <td class="small muted truncate" style="max-width:260px" title="{{ page.coverage_state or page.error_message or '' }}">
+              {{ page.coverage_state or page.error_message or '—' }}
+            </td>
+            <td class="tiny muted nowrap">{{ page.last_checked_at|ago }}</td>
+            <td class="tiny muted nowrap">{{ page.last_submitted_at|ago }}</td>
+            <td class="num">{{ page.submit_count }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="center muted" style="padding:34px">Brak adresow. Dodaj je recznie albo zeskanuj sitemapy.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+
+  {% if pages > 1 %}
+  <div class="pagination">
+    {% for p in range(1, pages + 1) %}
+      {% if p == 1 or p == pages or (p >= page - 2 and p <= page + 2) %}
+        {% if p == page %}
+          <span class="current">{{ p }}</span>
+        {% else %}
+          <a href="/sites/{{ site.id }}?tab=urls&page={{ p }}&status={{ filter_status }}&q={{ query }}">{{ p }}</a>
+        {% endif %}
+      {% elif p == page - 3 or p == page + 3 %}
+        <span>…</span>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{# ------------------------------------------------------------- SITEMAPY #}
+{% elif tab == 'sitemaps' %}
+
+<div class="grid side">
+  <div class="card">
+    <div class="card-head">
+      <h2>Sitemapy ({{ sitemaps|length }})</h2>
+      <div class="spacer"></div>
+      <form method="post" action="/sites/{{ site.id }}/sitemaps/sync" data-busy style="display:inline">
+        <button class="btn btn-sm" type="submit">{{ icon('refresh', 14) }} Synchronizuj z GSC</button>
+      </form>
+      <form method="post" action="/sites/{{ site.id }}/sitemaps/discover" data-busy style="display:inline">
+        <button class="btn btn-sm" type="submit">{{ icon('search', 14) }} Wykryj automatycznie</button>
+      </form>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Sciezka</th>
+            <th class="num">URL-e</th>
+            <th>Stan</th>
+            <th class="nowrap">Zgloszona</th>
+            <th class="right">Akcje</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for sm in sitemaps %}
+          <tr>
+            <td>
+              <a href="{{ sm.path }}" target="_blank" rel="noopener" class="small">{{ sm.path|short_url(58) }}</a>
+              <div class="tiny muted">
+                zrodlo: {{ sm.source }}{% if sm.is_sitemaps_index %} · indeks sitemap{% endif %}
+                {% if sm.last_downloaded_at %} · pobrana {{ sm.last_downloaded_at|ago }}{% endif %}
+              </div>
+            </td>
+            <td class="num">{{ sm.url_count|num }}</td>
+            <td>
+              {% if sm.errors %}
+                <span class="badge bad">{{ sm.errors }} bledow</span>
+              {% elif sm.warnings %}
+                <span class="badge warn">{{ sm.warnings }} ostrzezen</span>
+              {% elif sm.is_pending %}
+                <span class="badge info">przetwarzana</span>
+              {% else %}
+                <span class="badge ok">ok</span>
+              {% endif %}
+            </td>
+            <td class="tiny muted nowrap">{{ sm.last_submitted_at|ago }}</td>
+            <td class="right">
+              <div class="btn-row" style="justify-content:flex-end">
+                <form method="post" action="/sites/{{ site.id }}/sitemaps/{{ sm.id }}/scan" data-busy style="display:inline">
+                  <button class="btn btn-sm" type="submit" title="Pobierz URL-e z tej sitemapy">{{ icon('download', 14) }}</button>
+                </form>
+                <form method="post" action="/sites/{{ site.id }}/sitemaps/{{ sm.id }}/submit" data-busy style="display:inline">
+                  <button class="btn btn-sm" type="submit" title="Zglos do Google">{{ icon('upload', 14) }}</button>
+                </form>
+                <form method="post" action="/sites/{{ site.id }}/sitemaps/{{ sm.id }}/delete" style="display:inline"
+                      data-confirm="Usunac sitemape z panelu i z Google Search Console?">
+                  <input type="hidden" name="from_google" value="true">
+                  <button class="btn btn-sm btn-danger" type="submit" title="Usun">{{ icon('trash', 14) }}</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="center muted" style="padding:34px">
+            Brak sitemap. Uzyj „Wykryj automatycznie” albo dodaj adres recznie.
+          </td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <div class="card-head"><h2>Dodaj sitemape</h2></div>
+      <div class="card-body">
+        <form method="post" action="/sites/{{ site.id }}/sitemaps/add" data-busy>
+          <div class="field">
+            <label class="lbl">Adres sitemapy</label>
+            <input class="input" type="text" name="path" required placeholder="{{ site.home_url }}sitemap.xml">
+            <div class="hint">Obslugiwane sa rowniez indeksy sitemap oraz pliki .gz.</div>
+          </div>
+          <div class="switch-row">
+            <label class="switch"><input type="checkbox" name="submit_to_google" value="true" checked><span class="track"></span></label>
+            <div class="txt"><strong>Zglos do Google</strong><span>Wyslij sitemape do Search Console od razu po dodaniu</span></div>
+          </div>
+          <button class="btn btn-primary btn-block mt-2" type="submit">{{ icon('plus', 16) }} Dodaj sitemape</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="callout">
+          {{ icon('info') }}
+          <div>
+            Skanowanie sitemapy pobiera z niej wszystkie adresy i dodaje je do panelu.
+            Dopiero potem mozesz sprawdzic ich status i zglosic do indeksowania.
+          </div>
+        </div>
+        <form method="post" action="/sites/{{ site.id }}/scan" data-busy class="mt-2">
+          <button class="btn btn-block" type="submit">{{ icon('sitemap', 15) }} Skanuj wszystkie sitemapy</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# --------------------------------------------------------------- ZADANIA #}
+{% elif tab == 'jobs' %}
+
+<div class="card">
+  <div class="card-head">
+    <h2>Ostatnie zadania tej strony</h2>
+    <div class="spacer"></div>
+    <a class="btn btn-sm btn-ghost" href="/history?site_id={{ site.id }}">Pelna historia</a>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Kiedy</th><th>Typ</th><th>Cel</th><th>Status</th><th>Komunikat</th><th class="num">Czas</th></tr>
+      </thead>
+      <tbody>
+      {% for job in jobs %}
+        <tr>
+          <td class="tiny muted nowrap">{{ job.created_at|dt }}</td>
+          <td class="small nowrap">{{ job.job_type|job_type }}</td>
+          <td class="url-cell small" title="{{ job.target }}">{{ job.target|short_url(52) }}</td>
+          <td><span class="badge {{ job.status|status_tone }}">{{ job.status|status_label }}</span></td>
+          <td class="small muted truncate" style="max-width:340px" title="{{ job.message or '' }}">{{ job.message or '—' }}</td>
+          <td class="num tiny muted">{{ (job.duration_ms|round|int + ' ms') if job.duration_ms else '—' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="center muted" style="padding:34px">Brak zadan dla tej strony.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ------------------------------------------------------------ USTAWIENIA #}
+{% else %}
+
+<div class="grid side">
+  <div class="card">
+    <div class="card-head"><h2>Ustawienia strony</h2></div>
+    <div class="card-body">
+      <form method="post" action="/sites/{{ site.id }}/settings" data-busy>
+        <div class="field">
+          <label class="lbl">Nazwa wyswietlana</label>
+          <input class="input" type="text" name="display_name" value="{{ site.display_name }}">
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label class="lbl">Dzienny limit zgloszen</label>
+            <input class="input" type="number" name="daily_limit" min="0" max="10000" value="{{ site.daily_limit }}">
+            <div class="hint">Ile URL-i z tej strony moze byc zgloszonych w jednym przebiegu.</div>
+          </div>
+          <div class="field">
+            <label class="lbl">Priorytet</label>
+            <input class="input" type="number" name="priority" min="0" max="100" value="{{ site.priority }}">
+            <div class="hint">Wyzszy priorytet = wczesniejsza kolejka przy wspolnym limicie.</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="switch-row">
+          <label class="switch"><input type="checkbox" name="auto_index" value="true" {% if site.auto_index %}checked{% endif %}><span class="track"></span></label>
+          <div class="txt"><strong>Auto-indeksowanie</strong><span>Codzienny skan sitemap, inspekcja i zgloszenia bez Twojego udzialu</span></div>
+        </div>
+        <div class="switch-row">
+          <label class="switch"><input type="checkbox" name="indexnow_enabled" value="true" {% if site.indexnow_enabled %}checked{% endif %}><span class="track"></span></label>
+          <div class="txt"><strong>IndexNow</strong><span>Rownolegle zglaszaj adresy do Bing, Yandex i Seznam</span></div>
+        </div>
+        <div class="switch-row">
+          <label class="switch"><input type="checkbox" name="is_active" value="true" {% if site.is_active %}checked{% endif %}><span class="track"></span></label>
+          <div class="txt"><strong>Strona aktywna</strong><span>Wylaczona strona jest pomijana przez harmonogram</span></div>
+        </div>
+
+        <button class="btn btn-primary mt-2" type="submit">{{ icon('check', 16) }} Zapisz ustawienia</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <div class="card-head"><h2>Klucz IndexNow</h2></div>
+      <div class="card-body">
+        <p class="small soft">
+          Aby IndexNow dzialal, plik z kluczem musi byc dostepny pod adresem:
+        </p>
+        <div class="code-block mb-1">{{ indexnow_url }}</div>
+        <p class="small soft">Zawartosc pliku (sam klucz):</p>
+        <div class="code-block mb-2">{{ site.indexnow_key }}</div>
+        <div class="btn-row">
+          <a class="btn btn-sm" href="/sites/{{ site.id }}/indexnow-key">{{ icon('download', 14) }} Pobierz plik</a>
+          <button class="btn btn-sm" type="button" data-copy="{{ site.indexnow_key }}">Kopiuj klucz</button>
+          <form method="post" action="/sites/{{ site.id }}/regenerate-key" style="display:inline"
+                data-confirm="Wygenerowac nowy klucz? Stary plik przestanie dzialac.">
+            <button class="btn btn-sm btn-ghost" type="submit">{{ icon('refresh', 14) }} Nowy klucz</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Strefa niebezpieczna</h2></div>
+      <div class="card-body">
+        <p class="small soft">
+          Usuniecie strony kasuje z panelu wszystkie jej adresy, sitemapy i historie zadan.
+          Nie wplywa to na dane w Google Search Console.
+        </p>
+        <form method="post" action="/sites/{{ site.id }}/delete"
+              data-confirm="Na pewno usunac {{ site.display_name }} i wszystkie powiazane dane?">
+          <button class="btn btn-danger btn-block" type="submit">{{ icon('trash', 15) }} Usun strone z panelu</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}

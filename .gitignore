@@ -13,3 +13,6 @@ data/
 .ruff_cache/
 .idea/
 .vscode/
+node_modules/
+dist/
+*.tsbuildinfo
