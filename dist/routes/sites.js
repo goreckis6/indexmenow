@@ -153,6 +153,20 @@ sitesRouter.post("/:siteId/settings", asyncHandler(async (req, res) => {
     flash(req, "Ustawienia strony zapisane.", "success");
     res.redirect(303, back(site.id, "settings"));
 }));
+sitesRouter.post("/:siteId/toggle-auto", asyncHandler(async (req, res) => {
+    const site = await requireSite(req, Number(req.params.siteId));
+    const enabled = !site.auto_index;
+    await db
+        .updateTable("sites")
+        .set({ auto_index: enabled })
+        .where("id", "=", site.id)
+        .execute();
+    flash(req, enabled
+        ? `Auto-indeks wlaczony dla ${site.display_name} (limit ${site.daily_limit}/dzien).`
+        : `Auto-indeks wylaczony dla ${site.display_name}.`, "success");
+    const redirectTo = String(req.body.redirect || "/sites");
+    res.redirect(303, redirectTo.startsWith("/") ? redirectTo : "/sites");
+}));
 sitesRouter.post("/:siteId/delete", asyncHandler(async (req, res) => {
     const site = await requireSite(req, Number(req.params.siteId));
     const name = site.display_name;

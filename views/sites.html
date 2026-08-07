@@ -82,11 +82,16 @@
             </div>
           </td>
           <td>
-            {% if row.site.auto_index %}
-              <span class="badge ok"><span class="dot"></span> {{ row.site.daily_limit }}/dzien</span>
-            {% else %}
-              <span class="badge">Wylaczone</span>
-            {% endif %}
+            <form method="post" action="/sites/{{ row.site.id }}/toggle-auto" style="display:inline">
+              <input type="hidden" name="redirect" value="/sites">
+              <button class="badge {{ 'ok' if row.site.auto_index else '' }}" type="submit" title="Przelacz auto-indeks">
+                {% if row.site.auto_index %}
+                  <span class="dot"></span> {{ row.site.daily_limit }}/dzien
+                {% else %}
+                  Wylaczone
+                {% endif %}
+              </button>
+            </form>
           </td>
           <td>
             {% if row.site.indexnow_enabled %}

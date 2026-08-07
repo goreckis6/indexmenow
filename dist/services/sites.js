@@ -76,6 +76,8 @@ export async function importSitesFromGsc(userId, workspace) {
                 home_url: propertyToHomeUrl(propertyUrl),
                 permission_level: permission,
                 indexnow_key: generateIndexNowKey(),
+                auto_index: true,
+                daily_limit: 50,
             })
                 .execute();
             result.created += 1;
@@ -103,6 +105,8 @@ export async function createSite(workspaceId, propertyUrl) {
         home_url: propertyToHomeUrl(normalized),
         permission_level: "manual",
         indexnow_key: generateIndexNowKey(),
+        auto_index: true,
+        daily_limit: 50,
     })
         .executeTakeFirst();
     return db
