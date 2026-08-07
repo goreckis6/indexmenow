@@ -126,6 +126,16 @@ export function configureTemplates(app) {
         return Number.isFinite(n) ? n : 0;
     });
     env.addFilter("upper", (value) => String(value ?? "").toUpperCase());
+    // Nunjucks nie ma wycinkow Pythona `value[:16]` — dwukropek wywala parser.
+    env.addFilter("slice", (value, start = 0, end) => {
+        const text = String(value ?? "");
+        return end === undefined ? text.slice(Number(start) || 0) : text.slice(Number(start) || 0, Number(end));
+    });
+    env.addFilter("iso_minute", (value) => {
+        if (!value)
+            return "";
+        return String(value).slice(0, 16).replace("T", " ");
+    });
     env.addGlobal("app_name", config.appName);
     env.addGlobal("now", () => new Date());
     return env;

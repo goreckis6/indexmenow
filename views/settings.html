@@ -208,7 +208,7 @@
                 {% elif run.id == 'scan-sitemaps' %}Skan sitemap
                 {% else %}Migawka statystyk{% endif %}
               </strong>
-              <span>{{ run.next_run[:16]|replace('T', ' ') if run.next_run else 'nie zaplanowano' }}</span>
+              <span>{{ run.next_run|iso_minute if run.next_run else 'nie zaplanowano' }}</span>
             </div>
             {{ icon('clock', 16) }}
           </div>
