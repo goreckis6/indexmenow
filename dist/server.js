@@ -149,6 +149,17 @@ async function buildFullApp() {
             path: "/",
         },
     }));
+    // Hostinger CDN (hcdn) cache'owal 303 z "/" → "/login". Po zalogowaniu
+    // edge oddawal HIT bez Cookie i petlil: /login (z sesja) → / → (cache) /login.
+    app.use((req, res, next) => {
+        if (req.path.startsWith("/static/"))
+            return next();
+        res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+        res.setHeader("Vary", "Cookie");
+        next();
+    });
     app.use(express.urlencoded({ extended: true, limit: "2mb" }));
     app.use(express.json({ limit: "1mb" }));
     app.use("/static", express.static(path.join(ROOT_DIR, "public"), { maxAge: "1d" }));
