@@ -19,13 +19,12 @@
       </div>
 
       <h1 style="font-size:1.5rem;margin-bottom:8px">Podaj haslo</h1>
-      <p class="soft mb-3">Ta strona jest zabezpieczona. Po poprawnym hasle zapamietamy Cie na 90 dni.</p>
 
       {% if error %}
         <div class="callout bad mb-2">{{ error }}</div>
       {% endif %}
 
-      <form method="post" action="/gate/login" data-busy>
+      <form method="post" action="/gate/login">
         <div class="field mb-2">
           <label class="lbl" for="password">Haslo</label>
           <input class="input" id="password" type="password" name="password" required autofocus

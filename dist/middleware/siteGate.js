@@ -5,8 +5,11 @@ import { applyNoStore, saveSession } from "./auth.js";
 const GATE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const GATE_COOKIE = "imp_gate";
 function passwordMatches(candidate, expected) {
-    const left = crypto.createHash("sha256").update(candidate, "utf8").digest();
-    const right = crypto.createHash("sha256").update(expected, "utf8").digest();
+    // Trim tylko z koncow — haslo moze miec spacje w srodku; hPanel czasem dokleja \r\n.
+    const leftRaw = candidate.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trimEnd();
+    const rightRaw = expected.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trimEnd();
+    const left = crypto.createHash("sha256").update(leftRaw, "utf8").digest();
+    const right = crypto.createHash("sha256").update(rightRaw, "utf8").digest();
     return crypto.timingSafeEqual(left, right);
 }
 function readCookie(req, name) {

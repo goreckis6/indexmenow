@@ -10,6 +10,15 @@ function str(name, fallback = "") {
     const value = process.env[name];
     return value === undefined || value === "" ? fallback : value;
 }
+/** Hasla z env: trim + zdejmij cudzyslowy (hPanel czasem zapisuje je doslownie). */
+function secretStr(name, fallback = "") {
+    let value = str(name, fallback).trim();
+    if ((value.startsWith('"') && value.endsWith('"') && value.length >= 2) ||
+        (value.startsWith("'") && value.endsWith("'") && value.length >= 2)) {
+        value = value.slice(1, -1);
+    }
+    return value;
+}
 function int(name, fallback) {
     const parsed = Number.parseInt(str(name), 10);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -132,9 +141,10 @@ export const config = {
     allowedEmails: str("ALLOWED_EMAILS"),
     /**
      * Haslo bramki przed panelem (SITE_GATE_PASSWORD).
-     * Puste = bramka wylaczona (np. lokalnie). Na morphyhub.com ustaw w hPanel.
+     * Puste = bramka wylaczona (np. lokalnie). Na morphyhub.com ustaw w hPanel
+     * BEZ cudzyslowow. Znak # w hasle jest OK w hPanel (nie w pliku .env bez "").
      */
-    siteGatePassword: str("SITE_GATE_PASSWORD"),
+    siteGatePassword: secretStr("SITE_GATE_PASSWORD"),
     db: resolvedDb.db,
     /** Blad konfiguracji DB z chwili importu (np. sqlite:// w DATABASE_URL). */
     dbConfigError: resolvedDb.error,

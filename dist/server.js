@@ -252,6 +252,12 @@ async function buildFullApp() {
     if (!config.googleConfigured) {
         console.warn("Brak GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET - logowanie bedzie niedostepne.");
     }
+    if (config.siteGatePassword) {
+        console.log(`Site gate: ON (dlugosc hasla=${config.siteGatePassword.length})`);
+    }
+    else {
+        console.log("Site gate: OFF (brak SITE_GATE_PASSWORD)");
+    }
     return app;
 }
 /**

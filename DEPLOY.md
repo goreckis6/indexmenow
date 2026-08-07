@@ -95,7 +95,9 @@ SCHEDULER_ENABLED=true
 SITE_GATE_PASSWORD=twoje-haslo-bramki
 ```
 
-`SITE_GATE_PASSWORD` — hasło przed całym panelem (ekran „Podaj hasło”). Puste / brak zmiennej = bramka wyłączona. W hPanel wklej wartość **bez** cudzysłowów (panel nie traktuje `#` jako komentarza).
+`SITE_GATE_PASSWORD` — hasło przed całym panelem (ekran „Podaj hasło”). Puste / brak zmiennej = bramka wyłączona.
+
+W hPanel wklej **samą wartość, bez cudzysłowów** — np. `MalinA666#`, nie `"MalinA666#"`. Po zapisie zrób **Restart** aplikacji. W logach powinno być `Site gate: ON (dlugosc hasla=…)`.
 
 ### Opcjonalne
 
