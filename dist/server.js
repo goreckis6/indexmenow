@@ -188,13 +188,13 @@ async function buildFullApp() {
     });
     configureTemplates(app);
     // Bramka haslem (SITE_GATE_PASSWORD) — przed Google OAuth / panelem.
-    const { siteGate, handleGateLogin, handleGateLogout } = await import("./middleware/siteGate.js");
-    app.get("/gate", (_req, res) => {
+    const { siteGate, handleGateLogin, handleGateLogout, hasGateAccess } = await import("./middleware/siteGate.js");
+    app.get("/gate", (req, res) => {
         if (!config.siteGatePassword) {
             res.redirect(303, "/");
             return;
         }
-        if (_req.session?.site_gate) {
+        if (hasGateAccess(req)) {
             res.redirect(303, "/");
             return;
         }
