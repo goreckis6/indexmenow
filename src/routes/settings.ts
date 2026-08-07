@@ -24,6 +24,12 @@ settingsRouter.get(
   asyncHandler(async (req, res) => {
     const workspace = req.workspace!;
     const user = req.user!;
+
+    // Przelicz limit: OAuth 200 + aktywne SA (naprawia stare workspace ze stale 200).
+    const quotaInfo = await quota.syncWorkspaceQuota(workspace.id);
+    workspace.daily_quota = quotaInfo.dailyQuota;
+    req.workspace = workspace;
+
     const accounts = await db
       .selectFrom("service_accounts")
       .selectAll()
@@ -49,6 +55,8 @@ settingsRouter.get(
         required_scopes: oauth.SCOPES,
         quota_used: await quota.getUsage(workspace.id),
         quota_history: await quota.usageHistory(workspace.id, 14),
+        quota_oauth: quotaInfo.oauthBaseline,
+        quota_sa: quotaInfo.serviceAccounts,
         next_runs: nextRunTimes(),
         running: runningTasks(),
         site_count: Number(siteCount?.total ?? 0),
@@ -63,16 +71,16 @@ settingsRouter.post(
   asyncHandler(async (req, res) => {
     const workspace = req.workspace!;
     const name = String(req.body.name ?? "").trim().slice(0, 120) || workspace.name;
-    const dailyQuota = Math.max(0, Math.min(Number(req.body.daily_quota) || 200, 100_000));
     await db
       .updateTable("workspaces")
       .set({
         name,
-        daily_quota: dailyQuota,
         auto_index_enabled: formBool(req.body.auto_index_enabled),
       })
       .where("id", "=", workspace.id)
       .execute();
+    // Limit dzienny liczy sie automatycznie z OAuth + SA — nie nadpisuj z formularza.
+    await quota.syncWorkspaceQuota(workspace.id);
     flash(req, "Ustawienia workspace zapisane.", "success");
     res.redirect(303, "/settings");
   }),
@@ -150,9 +158,13 @@ settingsRouter.post(
       })
       .execute();
 
+    const synced = await quota.syncWorkspaceQuota(workspace.id);
+
     flash(
       req,
-      `Dodano konto serwisowe ${info.client_email}. Pamietaj, aby dodac je jako wlasciciela w Google Search Console.`,
+      `Dodano konto serwisowe ${info.client_email}. Limit workspace: ${synced.dailyQuota}/dzien ` +
+        `(OAuth ${synced.oauthBaseline} + SA ${synced.serviceAccounts}). ` +
+        "Dodaj ten email jako wlasciciela w Google Search Console.",
       "success",
     );
     res.redirect(303, "/settings");
@@ -175,9 +187,11 @@ settingsRouter.post(
         .set({ is_active: !account.is_active })
         .where("id", "=", account.id)
         .execute();
+      const synced = await quota.syncWorkspaceQuota(req.workspace!.id);
       flash(
         req,
-        `Konto ${account.client_email} zostalo ${!account.is_active ? "wlaczone" : "wylaczone"}.`,
+        `Konto ${account.client_email} zostalo ${!account.is_active ? "wlaczone" : "wylaczone"}. ` +
+          `Limit workspace: ${synced.dailyQuota}/dzien.`,
         "success",
       );
     }
@@ -193,10 +207,11 @@ settingsRouter.post(
       .where("id", "=", Number(req.params.accountId))
       .where("workspace_id", "=", req.workspace!.id)
       .executeTakeFirst();
+    const synced = await quota.syncWorkspaceQuota(req.workspace!.id);
     flash(
       req,
       Number(result.numDeletedRows) > 0
-        ? "Konto serwisowe usuniete."
+        ? `Konto serwisowe usuniete. Limit workspace: ${synced.dailyQuota}/dzien.`
         : "Nie znaleziono konta serwisowego.",
       Number(result.numDeletedRows) > 0 ? "success" : "error",
     );

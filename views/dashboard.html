@@ -52,6 +52,7 @@
     <span class="accent"></span>
     <div class="label">Limit na dzis</div>
     <div class="value">{{ quota_used|num }} <span class="soft" style="font-size:1rem;font-weight:500">/ {{ quota_limit|num }}</span></div>
+    <div class="sub">OAuth {{ quota_oauth }} + SA {{ quota_sa }}</div>
     <div class="meter mt-1">
       <div class="progress {% if quota_percent > 90 %}bad{% elif quota_percent > 70 %}warn{% endif %}">
         <span style="width: {{ [quota_percent, 100]|min }}%"></span>

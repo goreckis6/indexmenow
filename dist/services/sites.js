@@ -3,6 +3,7 @@ import * as gsc from "../google/searchConsole.js";
 import { getAccessToken } from "../google/oauth.js";
 import { generateIndexNowKey } from "../lib/crypto.js";
 import { logEvent } from "./activity.js";
+import { defaultSiteDailyLimit } from "./quota.js";
 export function propertyToHomeUrl(propertyUrl) {
     if (propertyUrl.startsWith("sc-domain:")) {
         return `https://${propertyUrl.slice("sc-domain:".length)}/`;
@@ -77,7 +78,7 @@ export async function importSitesFromGsc(userId, workspace) {
                 permission_level: permission,
                 indexnow_key: generateIndexNowKey(),
                 auto_index: false,
-                daily_limit: 50,
+                daily_limit: defaultSiteDailyLimit(),
             })
                 .execute();
             result.created += 1;
@@ -106,7 +107,7 @@ export async function createSite(workspaceId, propertyUrl) {
         permission_level: "manual",
         indexnow_key: generateIndexNowKey(),
         auto_index: false,
-        daily_limit: 50,
+        daily_limit: defaultSiteDailyLimit(),
     })
         .executeTakeFirst();
     return db

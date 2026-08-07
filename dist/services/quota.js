@@ -1,7 +1,10 @@
 import { sql } from "kysely";
+import { config } from "../config.js";
 import { db } from "../db/index.js";
 import { Engine, JobStatus } from "../db/types.js";
 import { dayRange, daysAgo, todayIso } from "../lib/dates.js";
+/** Bazowy limit OAuth (jeden projekt Google Cloud) — bez kont SA. */
+export const OAUTH_DAILY_BASELINE = 200;
 export async function getUsage(workspaceId, engine = Engine.GOOGLE, day = todayIso()) {
     const row = await db
         .selectFrom("quota_usage")
@@ -11,6 +14,43 @@ export async function getUsage(workspaceId, engine = Engine.GOOGLE, day = todayI
         .where("engine", "=", engine)
         .executeTakeFirst();
     return row?.used ?? 0;
+}
+/** Suma daily_quota aktywnych kont serwisowych w workspace. */
+export async function serviceAccountCapacity(workspaceId) {
+    const row = await db
+        .selectFrom("service_accounts")
+        .select((eb) => eb.fn.sum("daily_quota").as("total"))
+        .where("workspace_id", "=", workspaceId)
+        .where("is_active", "=", true)
+        .executeTakeFirst();
+    return Number(row?.total ?? 0);
+}
+/**
+ * Przelicza limit workspace = OAuth 200 + suma aktywnych SA.
+ * Podnosi tez daily_limit stron, ktore jeszcze siedza na starym domyslnym 50.
+ */
+export async function syncWorkspaceQuota(workspaceId) {
+    const saCapacity = await serviceAccountCapacity(workspaceId);
+    const dailyQuota = OAUTH_DAILY_BASELINE + saCapacity;
+    await db
+        .updateTable("workspaces")
+        .set({ daily_quota: dailyQuota })
+        .where("id", "=", workspaceId)
+        .execute();
+    // Stary domysl 50 blokowal przebieg mimo wiekszej pojemnosci workspace.
+    if (dailyQuota > 50) {
+        await db
+            .updateTable("sites")
+            .set({ daily_limit: Math.min(dailyQuota, 200) })
+            .where("workspace_id", "=", workspaceId)
+            .where("daily_limit", "<=", 50)
+            .execute();
+    }
+    return {
+        dailyQuota,
+        serviceAccounts: saCapacity,
+        oauthBaseline: OAUTH_DAILY_BASELINE,
+    };
 }
 export async function remaining(workspace, engine = Engine.GOOGLE) {
     return Math.max(0, workspace.daily_quota - (await getUsage(workspace.id, engine)));
@@ -82,5 +122,9 @@ export async function submissionsLastDays(workspaceId, days = 30) {
         series.set(key, bucket);
     }
     return [...series.values()].sort((a, b) => a.day.localeCompare(b.day));
+}
+/** Domyslny limit nowej strony — nie wiecej niz quota workspace / config. */
+export function defaultSiteDailyLimit(workspaceQuota = config.defaultDailyQuota) {
+    return Math.min(200, Math.max(50, workspaceQuota));
 }
 //# sourceMappingURL=quota.js.map

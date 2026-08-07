@@ -63,6 +63,8 @@ dashboardRouter.get(
     });
 
     const usedToday = await quota.getUsage(workspace.id, Engine.GOOGLE);
+    const quotaInfo = await quota.syncWorkspaceQuota(workspace.id);
+    workspace.daily_quota = quotaInfo.dailyQuota;
     const stats = await workspaceUrlStats(workspace.id);
 
     res.render(
@@ -74,10 +76,12 @@ dashboardRouter.get(
         stats,
         site_rows: siteRows,
         quota_used: usedToday,
-        quota_limit: workspace.daily_quota,
-        quota_percent: workspace.daily_quota
-          ? Math.round((usedToday / workspace.daily_quota) * 100)
+        quota_limit: quotaInfo.dailyQuota,
+        quota_percent: quotaInfo.dailyQuota
+          ? Math.round((usedToday / quotaInfo.dailyQuota) * 100)
           : 0,
+        quota_oauth: quotaInfo.oauthBaseline,
+        quota_sa: quotaInfo.serviceAccounts,
         history: await workspaceIndexingHistory(workspace.id, 30),
         submissions: await quota.submissionsLastDays(workspace.id, 30),
         jobs: await recentJobs(workspace.id, 12),

@@ -22,12 +22,14 @@
               <input class="input" type="text" name="name" value="{{ workspace.name }}" required>
             </div>
             <div class="field">
-              <label class="lbl">Dzienny limit zgloszen do Google</label>
-              <input class="input" type="number" name="daily_quota" min="0" max="100000" value="{{ workspace.daily_quota }}">
+              <label class="lbl">Dzienny limit workspace (auto)</label>
+              <input class="input" type="text" value="{{ workspace.daily_quota }} / dzien" readonly disabled>
               <div class="hint">
-                Limit <strong>calego workspace</strong> (domyslnie 200 — tyle daje Google Indexing API na projekt Cloud).
-                Wykorzystano dzis: <strong>{{ quota_used }}</strong> / {{ workspace.daily_quota }}.
-                Kazda strona ma dodatkowo wlasny limit (domyslnie 50 URL/dzien) w ustawieniach strony.
+                Liczone automatycznie: <strong>OAuth {{ quota_oauth }}</strong>
+                + konta SA <strong>{{ quota_sa }}</strong>
+                = <strong>{{ workspace.daily_quota }}</strong>.
+                Wykorzystano dzis: <strong>{{ quota_used }}</strong>.
+                Na liscie stron „50/d” to byl stary limit strony — po dodaniu SA podnosi sie do 200 (albo ustaw w szczegolach strony).
               </div>
             </div>
           </div>
