@@ -16,6 +16,22 @@ export function popFlashes(req: Request): FlashMessage[] {
   return messages;
 }
 
+/** Zapis sesji w MySQL MUSI sie skonczyc przed redirectem — inaczej Hostinger gubi cookie i petla / ↔ /login. */
+export function saveSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!req.session) {
+      resolve();
+      return;
+    }
+    req.session.save((err) => (err ? reject(err) : resolve()));
+  });
+}
+
+export async function redirectWithSession(req: Request, res: Response, location: string): Promise<void> {
+  await saveSession(req);
+  res.redirect(303, location);
+}
+
 /**
  * Express nie ma odpowiednika `Depends` z FastAPI, wiec obsluga bledow
  * w handlerach async wymaga opakowania - bez tego odrzucona obietnica
@@ -33,9 +49,10 @@ export const loadUser: RequestHandler = asyncHandler(async (req, _res, next) => 
   const userId = req.session?.user_id;
   if (!userId) return next();
 
-  const user = await db.selectFrom("users").selectAll().where("id", "=", userId).executeTakeFirst();
+  const user = await db.selectFrom("users").selectAll().where("id", "=", Number(userId)).executeTakeFirst();
   if (!user || !user.is_active) {
-    req.session.destroy(() => undefined);
+    delete req.session.user_id;
+    delete req.session.workspace_id;
     return next();
   }
   req.user = user;
@@ -44,8 +61,13 @@ export const loadUser: RequestHandler = asyncHandler(async (req, _res, next) => 
 
 export const requireAuth: RequestHandler = (req, res, next) => {
   if (req.user) return next();
-  const target = req.path === "/" || req.path === "/login" ? "/login" : `/login?next=${encodeURIComponent(req.originalUrl)}`;
-  res.redirect(303, target);
+  // Unikaj /login?next=/login?... (petla w Location)
+  const pathOnly = (req.originalUrl || req.path || "/").split("?")[0] ?? "/";
+  if (pathOnly === "/" || pathOnly === "/login") {
+    res.redirect(303, "/login");
+    return;
+  }
+  res.redirect(303, `/login?next=${encodeURIComponent(req.originalUrl)}`);
 };
 
 export const requireApiAuth: RequestHandler = (req, res, next) => {

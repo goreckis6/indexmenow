@@ -5,35 +5,41 @@ import { db } from "../db/index.js";
 import { GoogleApiError } from "../google/errors.js";
 import * as oauth from "../google/oauth.js";
 import { decrypt, generateState } from "../lib/crypto.js";
-import { asyncHandler, flash, loadUser, requireAuth, resolveWorkspace, } from "../middleware/auth.js";
+import { asyncHandler, flash, loadUser, redirectWithSession, requireAuth, resolveWorkspace, saveSession, } from "../middleware/auth.js";
 import { logEvent } from "../services/activity.js";
 import { createDefaultWorkspace } from "../services/workspaces.js";
 import { baseContext } from "../templating.js";
 export const authRouter = Router();
 authRouter.get("/login", loadUser, asyncHandler(async (req, res) => {
-    if (req.user)
-        return res.redirect(303, "/");
+    if (req.user) {
+        const rawNext = typeof req.query.next === "string" ? req.query.next : "/";
+        const nextUrl = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/login")
+            ? rawNext
+            : "/";
+        return redirectWithSession(req, res, nextUrl);
+    }
     res.render("login.html", baseContext(req, {
         google_configured: config.googleConfigured,
         redirect_uri: config.redirectUri,
         next: typeof req.query.next === "string" ? req.query.next : "/",
     }));
 }));
-authRouter.get("/auth/google", (req, res) => {
+authRouter.get("/auth/google", asyncHandler(async (req, res) => {
     if (!config.googleConfigured) {
         flash(req, "Brak konfiguracji Google OAuth w pliku .env", "error");
-        return res.redirect(303, "/login");
+        return redirectWithSession(req, res, "/login");
     }
     const state = generateState();
     req.session.oauth_state = state;
     req.session.oauth_next = typeof req.query.next === "string" ? req.query.next : "/";
+    await saveSession(req);
     res.redirect(303, oauth.buildAuthorizationUrl(state));
-});
+}));
 authRouter.get("/auth/callback", asyncHandler(async (req, res) => {
     const error = typeof req.query.error === "string" ? req.query.error : null;
     if (error) {
         flash(req, `Logowanie anulowane: ${error}`, "error");
-        return res.redirect(303, "/login");
+        return redirectWithSession(req, res, "/login");
     }
     const code = typeof req.query.code === "string" ? req.query.code : null;
     const state = typeof req.query.state === "string" ? req.query.state : null;
@@ -41,7 +47,7 @@ authRouter.get("/auth/callback", asyncHandler(async (req, res) => {
     delete req.session.oauth_state;
     if (!code || !state || state !== expected) {
         flash(req, "Nieprawidlowy stan logowania. Sprobuj ponownie.", "error");
-        return res.redirect(303, "/login");
+        return redirectWithSession(req, res, "/login");
     }
     let tokenData;
     let profile;
@@ -53,17 +59,17 @@ authRouter.get("/auth/callback", asyncHandler(async (req, res) => {
         const message = err instanceof GoogleApiError ? err.toString() : String(err);
         console.error("OAuth failed:", message);
         flash(req, `Blad logowania Google: ${message}`, "error");
-        return res.redirect(303, "/login");
+        return redirectWithSession(req, res, "/login");
     }
     const email = (profile.email ?? "").toLowerCase();
     if (!email) {
         flash(req, "Konto Google nie udostepnilo adresu e-mail.", "error");
-        return res.redirect(303, "/login");
+        return redirectWithSession(req, res, "/login");
     }
     const allowed = config.allowedEmailList;
     if (allowed.length > 0 && !allowed.includes(email)) {
         flash(req, `Konto ${email} nie ma dostepu do tego panelu.`, "error");
-        return res.redirect(303, "/login");
+        return redirectWithSession(req, res, "/login");
     }
     let user = (await db
         .selectFrom("users")
@@ -115,7 +121,7 @@ authRouter.get("/auth/callback", asyncHandler(async (req, res) => {
     }
     if (!user.is_active) {
         flash(req, "To konto zostalo zablokowane przez administratora.", "error");
-        return res.redirect(303, "/login");
+        return redirectWithSession(req, res, "/login");
     }
     await db
         .updateTable("users")
@@ -131,6 +137,16 @@ authRouter.get("/auth/callback", asyncHandler(async (req, res) => {
         .executeTakeFirst();
     if (!workspace)
         workspace = await createDefaultWorkspace(user);
+    const rawNext = req.session.oauth_next || "/";
+    delete req.session.oauth_next;
+    let nextUrl = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/login")
+        ? rawNext
+        : "/";
+    // Nowa sesja po loginie — unikamy fixacji ID sesji i wymuszamy zapis do MySQL
+    // zanim padnie Location (inaczej / ↔ /login na Hostingerze).
+    await new Promise((resolve, reject) => {
+        req.session.regenerate((err) => (err ? reject(err) : resolve()));
+    });
     req.session.user_id = user.id;
     req.session.workspace_id = workspace.id;
     const granted = tokenData.scope ?? "";
@@ -143,11 +159,7 @@ authRouter.get("/auth/callback", asyncHandler(async (req, res) => {
         category: "auth",
     });
     flash(req, `Zalogowano jako ${user.name || email}.`, "success");
-    let nextUrl = req.session.oauth_next || "/";
-    delete req.session.oauth_next;
-    if (!nextUrl.startsWith("/"))
-        nextUrl = "/";
-    res.redirect(303, nextUrl);
+    await redirectWithSession(req, res, nextUrl);
 }));
 authRouter.get("/logout", loadUser, asyncHandler(async (req, res) => {
     if (req.user && req.query.revoke === "1") {

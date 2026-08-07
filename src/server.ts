@@ -130,7 +130,8 @@ function buildDiagnosticApp(reason: string): express.Express {
 
 async function buildFullApp(): Promise<express.Express> {
   const app = express();
-  app.set("trust proxy", 1);
+  // CDN + reverse proxy Hostingera: bez tego cookie Secure / req.secure sa zle.
+  app.set("trust proxy", true);
 
   const sessionStore = new MySQLStore(
     {
@@ -156,12 +157,14 @@ async function buildFullApp(): Promise<express.Express> {
       secret: config.secretKey,
       resave: false,
       saveUninitialized: false,
+      proxy: true,
       store: sessionStore,
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         sameSite: "lax",
         secure: config.isHttps,
         httpOnly: true,
+        path: "/",
       },
     }),
   );

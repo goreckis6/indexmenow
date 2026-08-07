@@ -9,8 +9,10 @@ import {
   asyncHandler,
   flash,
   loadUser,
+  redirectWithSession,
   requireAuth,
   resolveWorkspace,
+  saveSession,
 } from "../middleware/auth.js";
 import { logEvent } from "../services/activity.js";
 import { createDefaultWorkspace } from "../services/workspaces.js";
@@ -22,7 +24,13 @@ authRouter.get(
   "/login",
   loadUser,
   asyncHandler(async (req, res) => {
-    if (req.user) return res.redirect(303, "/");
+    if (req.user) {
+      const rawNext = typeof req.query.next === "string" ? req.query.next : "/";
+      const nextUrl = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/login")
+        ? rawNext
+        : "/";
+      return redirectWithSession(req, res, nextUrl);
+    }
     res.render(
       "login.html",
       baseContext(req, {
@@ -34,16 +42,20 @@ authRouter.get(
   }),
 );
 
-authRouter.get("/auth/google", (req, res) => {
-  if (!config.googleConfigured) {
-    flash(req, "Brak konfiguracji Google OAuth w pliku .env", "error");
-    return res.redirect(303, "/login");
-  }
-  const state = generateState();
-  req.session.oauth_state = state;
-  req.session.oauth_next = typeof req.query.next === "string" ? req.query.next : "/";
-  res.redirect(303, oauth.buildAuthorizationUrl(state));
-});
+authRouter.get(
+  "/auth/google",
+  asyncHandler(async (req, res) => {
+    if (!config.googleConfigured) {
+      flash(req, "Brak konfiguracji Google OAuth w pliku .env", "error");
+      return redirectWithSession(req, res, "/login");
+    }
+    const state = generateState();
+    req.session.oauth_state = state;
+    req.session.oauth_next = typeof req.query.next === "string" ? req.query.next : "/";
+    await saveSession(req);
+    res.redirect(303, oauth.buildAuthorizationUrl(state));
+  }),
+);
 
 authRouter.get(
   "/auth/callback",
@@ -51,7 +63,7 @@ authRouter.get(
     const error = typeof req.query.error === "string" ? req.query.error : null;
     if (error) {
       flash(req, `Logowanie anulowane: ${error}`, "error");
-      return res.redirect(303, "/login");
+      return redirectWithSession(req, res, "/login");
     }
 
     const code = typeof req.query.code === "string" ? req.query.code : null;
@@ -61,7 +73,7 @@ authRouter.get(
 
     if (!code || !state || state !== expected) {
       flash(req, "Nieprawidlowy stan logowania. Sprobuj ponownie.", "error");
-      return res.redirect(303, "/login");
+      return redirectWithSession(req, res, "/login");
     }
 
     let tokenData: oauth.TokenResponse;
@@ -73,19 +85,19 @@ authRouter.get(
       const message = err instanceof GoogleApiError ? err.toString() : String(err);
       console.error("OAuth failed:", message);
       flash(req, `Blad logowania Google: ${message}`, "error");
-      return res.redirect(303, "/login");
+      return redirectWithSession(req, res, "/login");
     }
 
     const email = (profile.email ?? "").toLowerCase();
     if (!email) {
       flash(req, "Konto Google nie udostepnilo adresu e-mail.", "error");
-      return res.redirect(303, "/login");
+      return redirectWithSession(req, res, "/login");
     }
 
     const allowed = config.allowedEmailList;
     if (allowed.length > 0 && !allowed.includes(email)) {
       flash(req, `Konto ${email} nie ma dostepu do tego panelu.`, "error");
-      return res.redirect(303, "/login");
+      return redirectWithSession(req, res, "/login");
     }
 
     let user =
@@ -141,7 +153,7 @@ authRouter.get(
 
     if (!user.is_active) {
       flash(req, "To konto zostalo zablokowane przez administratora.", "error");
-      return res.redirect(303, "/login");
+      return redirectWithSession(req, res, "/login");
     }
 
     await db
@@ -159,6 +171,18 @@ authRouter.get(
       .executeTakeFirst();
     if (!workspace) workspace = await createDefaultWorkspace(user);
 
+    const rawNext = req.session.oauth_next || "/";
+    delete req.session.oauth_next;
+    let nextUrl =
+      rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/login")
+        ? rawNext
+        : "/";
+
+    // Nowa sesja po loginie — unikamy fixacji ID sesji i wymuszamy zapis do MySQL
+    // zanim padnie Location (inaczej / ↔ /login na Hostingerze).
+    await new Promise<void>((resolve, reject) => {
+      req.session.regenerate((err) => (err ? reject(err) : resolve()));
+    });
     req.session.user_id = user.id;
     req.session.workspace_id = workspace.id;
 
@@ -178,10 +202,7 @@ authRouter.get(
     });
     flash(req, `Zalogowano jako ${user.name || email}.`, "success");
 
-    let nextUrl = req.session.oauth_next || "/";
-    delete req.session.oauth_next;
-    if (!nextUrl.startsWith("/")) nextUrl = "/";
-    res.redirect(303, nextUrl);
+    await redirectWithSession(req, res, nextUrl);
   }),
 );
 
