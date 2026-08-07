@@ -101,6 +101,7 @@ function configureTemplates(app) {
     env.addFilter("dt", fmtDatetime);
     env.addFilter("ago", fmtRelative);
     env.addFilter("num", fmtNumber);
+    env.addFilter("urlencode", (value) => encodeURIComponent(String(value ?? "")));
     env.addFilter("short_url", truncateUrl);
     env.addFilter("status_label", (value) => STATUS_LABELS[String(value)] ?? String(value ?? "—"));
     env.addFilter("status_tone", (value) => STATUS_TONES[String(value)] ?? "muted");

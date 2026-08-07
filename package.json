@@ -34,9 +34,7 @@
     "multer": "^2.2.0",
     "mysql2": "^3.23.2",
     "nunjucks": "^3.2.4",
+    "tsx": "^4.23.9",
     "typescript": "^7.0.2"
-  },
-  "devDependencies": {
-    "tsx": "^4.23.9"
   }
 }

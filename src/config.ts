@@ -27,57 +27,100 @@ function bool(name: string, fallback: boolean): boolean {
   return ["1", "true", "yes", "on"].includes(value);
 }
 
+export type DbConfig = {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+};
+
 /**
  * Hostinger udostepnia dane MySQL pod roznymi nazwami zaleznie od miejsca,
  * w ktorym sie je konfiguruje. Przyjmujemy jedno i drugie, zeby nie zmuszac
  * do przepisywania wartosci recznie.
+ *
+ * Blad parsowania NIE rzuca przy imporcie modulu — inaczej bootloader
+ * nie zdazy zrobic listen() i Hostinger pokazuje 503 CDN.
  */
-function databaseConfig() {
+function databaseConfig(): { db: DbConfig; error: string | null } {
   const url = str("DATABASE_URL");
   if (url) {
     let parsed: URL;
     try {
       parsed = new URL(url);
     } catch {
-      throw new Error(`DATABASE_URL nie jest poprawnym adresem: ${url}`);
+      return {
+        db: {
+          host: "localhost",
+          port: 3306,
+          user: "root",
+          password: "",
+          database: "indexmenow",
+        },
+        error: `DATABASE_URL nie jest poprawnym adresem: ${url}`,
+      };
     }
-    // Bez tej kontroli adres w innym formacie (np. zostawiony sqlite:///...)
-    // rozlozylby sie na puste pola i aplikacja probowalaby sie łączyć
-    // z localhost jako root, zamiast zglosic blad konfiguracji.
     if (!["mysql:", "mariadb:"].includes(parsed.protocol)) {
-      throw new Error(
-        `DATABASE_URL musi wskazywac na MySQL (mysql://...), a wskazuje na "${parsed.protocol}//". ` +
-          "Ta wersja panelu dziala tylko na MySQL.",
-      );
+      return {
+        db: {
+          host: "localhost",
+          port: 3306,
+          user: "root",
+          password: "",
+          database: "indexmenow",
+        },
+        error:
+          `DATABASE_URL musi wskazywac na MySQL (mysql://...), a wskazuje na "${parsed.protocol}//". ` +
+          "Usun DATABASE_URL z hPanel albo ustaw mysql://... — ta wersja dziala tylko na MySQL.",
+      };
     }
     const database = parsed.pathname.replace(/^\//, "");
     if (!database) {
-      throw new Error("DATABASE_URL nie zawiera nazwy bazy danych (czesc po ostatnim /).");
+      return {
+        db: {
+          host: parsed.hostname || "localhost",
+          port: parsed.port ? Number.parseInt(parsed.port, 10) : 3306,
+          user: decodeURIComponent(parsed.username || "root"),
+          password: decodeURIComponent(parsed.password || ""),
+          database: "indexmenow",
+        },
+        error: "DATABASE_URL nie zawiera nazwy bazy danych (czesc po ostatnim /).",
+      };
     }
     return {
-      host: parsed.hostname,
-      port: parsed.port ? Number.parseInt(parsed.port, 10) : 3306,
-      user: decodeURIComponent(parsed.username),
-      password: decodeURIComponent(parsed.password),
-      database,
+      db: {
+        host: parsed.hostname,
+        port: parsed.port ? Number.parseInt(parsed.port, 10) : 3306,
+        user: decodeURIComponent(parsed.username),
+        password: decodeURIComponent(parsed.password),
+        database,
+      },
+      error: null,
     };
   }
   return {
-    host: str("DB_HOST", str("MYSQL_HOST", "localhost")),
-    port: int("DB_PORT", int("MYSQL_PORT", 3306)),
-    user: str("DB_USER", str("MYSQL_USER", "root")),
-    password: str("DB_PASSWORD", str("MYSQL_PASSWORD", "")),
-    database: str("DB_NAME", str("MYSQL_DATABASE", "indexmenow")),
+    db: {
+      host: str("DB_HOST", str("MYSQL_HOST", "localhost")),
+      port: int("DB_PORT", int("MYSQL_PORT", 3306)),
+      user: str("DB_USER", str("MYSQL_USER", "root")),
+      password: str("DB_PASSWORD", str("MYSQL_PASSWORD", "")),
+      database: str("DB_NAME", str("MYSQL_DATABASE", "indexmenow")),
+    },
+    error: null,
   };
 }
 
 const baseUrl = str("BASE_URL", "http://localhost:8006").replace(/\/+$/, "");
 const secretKey = str("SECRET_KEY", "insecure-dev-key-change-me");
+const resolvedDb = databaseConfig();
 
 export const config = {
   appName: "IndexMeNow",
   host: str("HOST", "0.0.0.0"),
-  port: int("PORT", 8006),
+  // Hostinger wstrzykuje PORT. Fallback 3000 jak w ich docsach Express
+  // (lokalnie nadpisujesz PORT=8006 w .env).
+  port: int("PORT", 3000),
   baseUrl,
   secretKey,
   debug: bool("DEBUG", false),
@@ -88,7 +131,9 @@ export const config = {
   googleClientSecret: str("GOOGLE_CLIENT_SECRET"),
   allowedEmails: str("ALLOWED_EMAILS"),
 
-  db: databaseConfig(),
+  db: resolvedDb.db,
+  /** Blad konfiguracji DB z chwili importu (np. sqlite:// w DATABASE_URL). */
+  dbConfigError: resolvedDb.error as string | null,
 
   defaultDailyQuota: int("DEFAULT_DAILY_QUOTA", 200),
   sitemapScanIntervalHours: int("SITEMAP_SCAN_INTERVAL_HOURS", 12),

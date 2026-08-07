@@ -12,10 +12,12 @@ import { baseContext } from "../templating";
 import { panelAuth } from "./auth";
 
 export const dashboardRouter = Router();
-dashboardRouter.use(...panelAuth);
 
+// panelAuth TYLKO na trasach dashboardu — `use(panelAuth)` na routerze
+// zamontowanym pod "/" przejmowaloby tez /healthz i inne sciezki.
 dashboardRouter.get(
   "/",
+  ...panelAuth,
   asyncHandler(async (req, res) => {
     const workspace = req.workspace!;
     const user = req.user!;

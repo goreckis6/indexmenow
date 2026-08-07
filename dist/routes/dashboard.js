@@ -47,8 +47,9 @@ const workspaces_1 = require("../services/workspaces");
 const templating_1 = require("../templating");
 const auth_2 = require("./auth");
 exports.dashboardRouter = (0, express_1.Router)();
-exports.dashboardRouter.use(...auth_2.panelAuth);
-exports.dashboardRouter.get("/", (0, auth_1.asyncHandler)(async (req, res) => {
+// panelAuth TYLKO na trasach dashboardu — `use(panelAuth)` na routerze
+// zamontowanym pod "/" przejmowaloby tez /healthz i inne sciezki.
+exports.dashboardRouter.get("/", ...auth_2.panelAuth, (0, auth_1.asyncHandler)(async (req, res) => {
     const workspace = req.workspace;
     const user = req.user;
     const sites = await db_1.db

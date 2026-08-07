@@ -91,6 +91,7 @@ export function configureTemplates(app: Express): nunjucks.Environment {
   env.addFilter("dt", fmtDatetime);
   env.addFilter("ago", fmtRelative);
   env.addFilter("num", fmtNumber);
+  env.addFilter("urlencode", (value: unknown) => encodeURIComponent(String(value ?? "")));
   env.addFilter("short_url", truncateUrl);
   env.addFilter("status_label", (value: unknown) => STATUS_LABELS[String(value)] ?? String(value ?? "—"));
   env.addFilter("status_tone", (value: unknown) => STATUS_TONES[String(value)] ?? "muted");

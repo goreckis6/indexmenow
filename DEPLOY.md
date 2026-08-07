@@ -28,13 +28,22 @@ Schemat tabel tworzy się sam przy pierwszym starcie aplikacji (`migrate`).
 
 | Pole | Wartość |
 |---|---|
-| Framework | **Express** (albo *Other*) |
-| Node.js | **22** (wymagane — zależnosci nie działają na 20) |
-| Root directory | `/` (puste) |
-| Build command / script | `build` (= `npm run build`) |
-| Output directory | `dist` |
-| Entry file | `server.js` (albo `dist/server.js`) |
-| Start | `npm start` |
+| Framework | **Express** |
+| Node.js | **22** (wymagane) |
+| Root directory | `./` (puste) |
+| Build command / script | `build` (może zostać — trzyma `dist/` jako zapas) |
+| Output directory | **puste** (nie wpisuj `dist`) |
+| Entry file | **`server.js`** (NIE `app.js`, NIE `dist/server.js`) |
+| Start | `npm start` (= `node server.js` → tsx ładuje `src/server.ts`) |
+
+> **Dlaczego nie `node dist/server.js`?** Zależność `kysely` jest czystym ESM.
+> CommonJS z `tsc` wywala się przez `ERR_REQUIRE_ESM` i Hostinger pokazuje 503.
+> `server.js` omija to przez `tsx`.
+
+Jeśli po zielonym buildzie nadal widzisz 503 CDN Hostingera:
+1. **Entry file = `server.js`**, Output directory puste → Save → Redeploy.
+2. Runtime logs: szukaj `[boot] listening`.
+3. `/healthz` — nawet bez MySQL powinien zwrócić JSON (`booting` / `misconfigured` / `ok`).
 
 4. Wklej zmienne środowiskowe (poniżej) i kliknij **Deploy**.
 

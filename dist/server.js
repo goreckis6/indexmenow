@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.startFromBootloader = startFromBootloader;
 const node_path_1 = __importDefault(require("node:path"));
 const express_1 = __importDefault(require("express"));
 const express_session_1 = __importDefault(require("express-session"));
@@ -73,13 +74,11 @@ function diagnosticHtml(reason) {
     body{font-family:system-ui,sans-serif;max-width:42rem;margin:3rem auto;padding:0 1.25rem;line-height:1.5;color:#111}
     code{background:#f3f3f3;padding:.1rem .35rem;border-radius:4px}
     pre{background:#111;color:#eee;padding:1rem;border-radius:8px;overflow:auto;white-space:pre-wrap}
-    .ok{color:#0a7}
-    .bad{color:#b00}
   </style>
 </head>
 <body>
   <h1>IndexMeNow działa, ale nie jest gotowe</h1>
-  <p>Proces Node nasłuchuje (to już nie jest martwy 503 CDN). Brakuje bazy / zmiennych:</p>
+  <p>Proces Node nasłuchuje. Brakuje bazy / zmiennych:</p>
   <pre>${escapeHtml(reason)}</pre>
   <p>W hPanel → <strong>Environment variables</strong> ustaw:</p>
   <pre>BASE_URL=https://morphyhub.com
@@ -92,28 +91,12 @@ DB_NAME=uXXXX_...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 ALLOWED_EMAILS=twoj@email.com</pre>
-  <p>Dane MySQL bierz z <strong>Databases → MySQL</strong> (prefix <code>uXXXX_</code>). Potem Redeploy / Restart.</p>
+  <p>Dane MySQL z <strong>Databases → MySQL</strong>. Potem Redeploy / Restart.</p>
   <p><a href="/healthz">/healthz</a></p>
 </body>
 </html>`;
 }
-function listenAndStayAlive(app, label) {
-    const port = config_1.config.port;
-    const server = app.listen(port, () => {
-        console.log(`${label} na porcie ${port} (BASE_URL=${config_1.config.baseUrl})`);
-    });
-    const shutdown = async (signal) => {
-        console.log(`Otrzymano ${signal}, zamykam...`);
-        await (0, scheduler_1.shutdownScheduler)().catch(() => undefined);
-        server.close(async () => {
-            await (0, db_1.closeDatabase)().catch(() => undefined);
-            process.exit(0);
-        });
-    };
-    process.on("SIGINT", () => void shutdown("SIGINT"));
-    process.on("SIGTERM", () => void shutdown("SIGTERM"));
-}
-function startDiagnosticServer(reason) {
+function buildDiagnosticApp(reason) {
     const app = (0, express_1.default)();
     app.set("trust proxy", 1);
     app.get("/healthz", (_req, res) => {
@@ -136,9 +119,9 @@ function startDiagnosticServer(reason) {
     app.use((_req, res) => {
         res.status(503).type("html").send(diagnosticHtml(reason));
     });
-    listenAndStayAlive(app, `${config_1.config.appName} (tryb diagnostyczny)`);
+    return app;
 }
-async function startFullApp() {
+async function buildFullApp() {
     const app = (0, express_1.default)();
     app.set("trust proxy", 1);
     const sessionStore = new MySQLStore({
@@ -171,6 +154,10 @@ async function startFullApp() {
     app.use(express_1.default.urlencoded({ extended: true, limit: "2mb" }));
     app.use(express_1.default.json({ limit: "1mb" }));
     app.use("/static", express_1.default.static(node_path_1.default.join(config_1.ROOT_DIR, "public"), { maxAge: "1d" }));
+    // Przed sesja / auth — Hostinger i monitoring musza trafic w zywy JSON.
+    app.get("/healthz", (_req, res) => {
+        res.json({ status: "ok", app: config_1.config.appName, version: "1.0.0" });
+    });
     (0, templating_1.configureTemplates)(app);
     app.use(auth_1.loadUser);
     const upload = (0, multer_1.default)({
@@ -187,9 +174,6 @@ async function startFullApp() {
     app.use("/settings", settings_1.settingsRouter);
     app.use("/tools", tools_1.toolsRouter);
     app.use("/api", api_1.apiRouter);
-    app.get("/healthz", (_req, res) => {
-        res.json({ status: "ok", app: config_1.config.appName, version: "1.0.0" });
-    });
     app.use((err, req, res, _next) => {
         const status = err instanceof auth_1.HttpError ? err.status : 500;
         const detail = err instanceof auth_1.HttpError
@@ -220,12 +204,20 @@ async function startFullApp() {
     if (!config_1.config.googleConfigured) {
         console.warn("Brak GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET - logowanie bedzie niedostepne.");
     }
-    listenAndStayAlive(app, config_1.config.appName);
+    return app;
 }
-async function main() {
+/**
+ * Buduje aplikacje Express BEZ listen().
+ * Uzywane przez rootowy server.js (bootloader Hostingera).
+ */
+async function startFromBootloader() {
     console.log(`Start ${config_1.config.appName}: PORT=${config_1.config.port} BASE_URL=${config_1.config.baseUrl} ` +
         `DB=${config_1.config.db.user}@${config_1.config.db.host}:${config_1.config.db.port}/${config_1.config.db.database}`);
     console.log(envPresenceLine());
+    if (config_1.config.dbConfigError) {
+        console.error(config_1.config.dbConfigError);
+        return buildDiagnosticApp(config_1.config.dbConfigError);
+    }
     if (config_1.config.isHttps && !process.env["PORT"]) {
         console.warn("Uwaga: brak zmiennej PORT. Hostinger powinien ja ustawic sam. " +
             "Jesli jej nie ma, proxy nie trafi w proces i zobaczysz 503 CDN.");
@@ -235,9 +227,7 @@ async function main() {
         const reason = `Brak wymaganych zmiennych w hPanel: ${missing.join(", ")}. ` +
             "Websites → Twoja strona → Environment variables.";
         console.error(reason);
-        // Nie exit(1): zostajemy przy zyciu, zeby zamiast 503 CDN pokazac checklistę.
-        startDiagnosticServer(reason);
-        return;
+        return buildDiagnosticApp(reason);
     }
     try {
         await (0, db_1.pingDatabase)();
@@ -248,29 +238,35 @@ async function main() {
     catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         console.error("Nie moge polaczyc sie z MySQL / utworzyc tabel:", reason);
-        console.error("W hPanel → Environment variables ustaw DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME " +
-            "dokladnie jak w Databases → MySQL (z prefixem uXXXX_). Potem Redeploy.");
-        if (config_1.config.isHttps) {
-            startDiagnosticServer(reason);
-            return;
-        }
-        throw error;
+        return buildDiagnosticApp(reason);
     }
-    await startFullApp();
+    return buildFullApp();
 }
-main().catch((error) => {
-    console.error("Nie udalo sie uruchomic aplikacji:", error);
-    // Na produkcji HTTPS nadal sprobuj trzymac diagnostykę zamiast cichego 503.
-    if (config_1.config.isHttps) {
-        const reason = error instanceof Error ? error.message : String(error);
-        try {
-            startDiagnosticServer(reason);
-            return;
-        }
-        catch (listenError) {
-            console.error("Nie moge nawet otworzyc portu:", listenError);
-        }
-    }
-    process.exit(1);
-});
+async function listenDirectly() {
+    const app = await startFromBootloader();
+    const port = config_1.config.port;
+    const server = app.listen(port, () => {
+        console.log(`${config_1.config.appName} nasluchuje na porcie ${port} (BASE_URL=${config_1.config.baseUrl})`);
+    });
+    const shutdown = async (signal) => {
+        console.log(`Otrzymano ${signal}, zamykam...`);
+        await (0, scheduler_1.shutdownScheduler)().catch(() => undefined);
+        server.close(async () => {
+            await (0, db_1.closeDatabase)().catch(() => undefined);
+            process.exit(0);
+        });
+    };
+    process.on("SIGINT", () => void shutdown("SIGINT"));
+    process.on("SIGTERM", () => void shutdown("SIGTERM"));
+}
+// Uruchomienie bezposrednie: `node dist/server.js` / `tsx src/server.ts`
+const isDirectRun = typeof require !== "undefined" &&
+    typeof module !== "undefined" &&
+    require.main === module;
+if (isDirectRun) {
+    listenDirectly().catch((error) => {
+        console.error("Nie udalo sie uruchomic aplikacji:", error);
+        process.exit(1);
+    });
+}
 //# sourceMappingURL=server.js.map

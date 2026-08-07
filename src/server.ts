@@ -75,13 +75,11 @@ function diagnosticHtml(reason: string): string {
     body{font-family:system-ui,sans-serif;max-width:42rem;margin:3rem auto;padding:0 1.25rem;line-height:1.5;color:#111}
     code{background:#f3f3f3;padding:.1rem .35rem;border-radius:4px}
     pre{background:#111;color:#eee;padding:1rem;border-radius:8px;overflow:auto;white-space:pre-wrap}
-    .ok{color:#0a7}
-    .bad{color:#b00}
   </style>
 </head>
 <body>
   <h1>IndexMeNow działa, ale nie jest gotowe</h1>
-  <p>Proces Node nasłuchuje (to już nie jest martwy 503 CDN). Brakuje bazy / zmiennych:</p>
+  <p>Proces Node nasłuchuje. Brakuje bazy / zmiennych:</p>
   <pre>${escapeHtml(reason)}</pre>
   <p>W hPanel → <strong>Environment variables</strong> ustaw:</p>
   <pre>BASE_URL=https://morphyhub.com
@@ -94,31 +92,13 @@ DB_NAME=uXXXX_...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 ALLOWED_EMAILS=twoj@email.com</pre>
-  <p>Dane MySQL bierz z <strong>Databases → MySQL</strong> (prefix <code>uXXXX_</code>). Potem Redeploy / Restart.</p>
+  <p>Dane MySQL z <strong>Databases → MySQL</strong>. Potem Redeploy / Restart.</p>
   <p><a href="/healthz">/healthz</a></p>
 </body>
 </html>`;
 }
 
-function listenAndStayAlive(app: express.Express, label: string): void {
-  const port = config.port;
-  const server = app.listen(port, () => {
-    console.log(`${label} na porcie ${port} (BASE_URL=${config.baseUrl})`);
-  });
-
-  const shutdown = async (signal: string) => {
-    console.log(`Otrzymano ${signal}, zamykam...`);
-    await shutdownScheduler().catch(() => undefined);
-    server.close(async () => {
-      await closeDatabase().catch(() => undefined);
-      process.exit(0);
-    });
-  };
-  process.on("SIGINT", () => void shutdown("SIGINT"));
-  process.on("SIGTERM", () => void shutdown("SIGTERM"));
-}
-
-function startDiagnosticServer(reason: string): void {
+function buildDiagnosticApp(reason: string): express.Express {
   const app = express();
   app.set("trust proxy", 1);
 
@@ -144,10 +124,10 @@ function startDiagnosticServer(reason: string): void {
     res.status(503).type("html").send(diagnosticHtml(reason));
   });
 
-  listenAndStayAlive(app, `${config.appName} (tryb diagnostyczny)`);
+  return app;
 }
 
-async function startFullApp(): Promise<void> {
+async function buildFullApp(): Promise<express.Express> {
   const app = express();
   app.set("trust proxy", 1);
 
@@ -189,6 +169,11 @@ async function startFullApp(): Promise<void> {
   app.use(express.json({ limit: "1mb" }));
   app.use("/static", express.static(path.join(ROOT_DIR, "public"), { maxAge: "1d" }));
 
+  // Przed sesja / auth — Hostinger i monitoring musza trafic w zywy JSON.
+  app.get("/healthz", (_req, res) => {
+    res.json({ status: "ok", app: config.appName, version: "1.0.0" });
+  });
+
   configureTemplates(app);
   app.use(loadUser);
 
@@ -208,10 +193,6 @@ async function startFullApp(): Promise<void> {
   app.use("/settings", settingsRouter);
   app.use("/tools", toolsRouter);
   app.use("/api", apiRouter);
-
-  app.get("/healthz", (_req, res) => {
-    res.json({ status: "ok", app: config.appName, version: "1.0.0" });
-  });
 
   app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const status = err instanceof HttpError ? err.status : 500;
@@ -254,15 +235,24 @@ async function startFullApp(): Promise<void> {
     console.warn("Brak GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET - logowanie bedzie niedostepne.");
   }
 
-  listenAndStayAlive(app, config.appName);
+  return app;
 }
 
-async function main(): Promise<void> {
+/**
+ * Buduje aplikacje Express BEZ listen().
+ * Uzywane przez rootowy server.js (bootloader Hostingera).
+ */
+export async function startFromBootloader(): Promise<express.Express> {
   console.log(
     `Start ${config.appName}: PORT=${config.port} BASE_URL=${config.baseUrl} ` +
       `DB=${config.db.user}@${config.db.host}:${config.db.port}/${config.db.database}`,
   );
   console.log(envPresenceLine());
+
+  if (config.dbConfigError) {
+    console.error(config.dbConfigError);
+    return buildDiagnosticApp(config.dbConfigError);
+  }
 
   if (config.isHttps && !process.env["PORT"]) {
     console.warn(
@@ -277,9 +267,7 @@ async function main(): Promise<void> {
       `Brak wymaganych zmiennych w hPanel: ${missing.join(", ")}. ` +
       "Websites → Twoja strona → Environment variables.";
     console.error(reason);
-    // Nie exit(1): zostajemy przy zyciu, zeby zamiast 503 CDN pokazac checklistę.
-    startDiagnosticServer(reason);
-    return;
+    return buildDiagnosticApp(reason);
   }
 
   try {
@@ -290,31 +278,40 @@ async function main(): Promise<void> {
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     console.error("Nie moge polaczyc sie z MySQL / utworzyc tabel:", reason);
-    console.error(
-      "W hPanel → Environment variables ustaw DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME " +
-        "dokladnie jak w Databases → MySQL (z prefixem uXXXX_). Potem Redeploy.",
-    );
-    if (config.isHttps) {
-      startDiagnosticServer(reason);
-      return;
-    }
-    throw error;
+    return buildDiagnosticApp(reason);
   }
 
-  await startFullApp();
+  return buildFullApp();
 }
 
-main().catch((error) => {
-  console.error("Nie udalo sie uruchomic aplikacji:", error);
-  // Na produkcji HTTPS nadal sprobuj trzymac diagnostykę zamiast cichego 503.
-  if (config.isHttps) {
-    const reason = error instanceof Error ? error.message : String(error);
-    try {
-      startDiagnosticServer(reason);
-      return;
-    } catch (listenError) {
-      console.error("Nie moge nawet otworzyc portu:", listenError);
-    }
-  }
-  process.exit(1);
-});
+async function listenDirectly(): Promise<void> {
+  const app = await startFromBootloader();
+  const port = config.port;
+  const server = app.listen(port, () => {
+    console.log(`${config.appName} nasluchuje na porcie ${port} (BASE_URL=${config.baseUrl})`);
+  });
+
+  const shutdown = async (signal: string) => {
+    console.log(`Otrzymano ${signal}, zamykam...`);
+    await shutdownScheduler().catch(() => undefined);
+    server.close(async () => {
+      await closeDatabase().catch(() => undefined);
+      process.exit(0);
+    });
+  };
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+}
+
+// Uruchomienie bezposrednie: `node dist/server.js` / `tsx src/server.ts`
+const isDirectRun =
+  typeof require !== "undefined" &&
+  typeof module !== "undefined" &&
+  require.main === module;
+
+if (isDirectRun) {
+  listenDirectly().catch((error) => {
+    console.error("Nie udalo sie uruchomic aplikacji:", error);
+    process.exit(1);
+  });
+}
