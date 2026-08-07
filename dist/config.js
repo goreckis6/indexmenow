@@ -11,13 +11,43 @@ function str(name, fallback = "") {
     return value === undefined || value === "" ? fallback : value;
 }
 /** Hasla z env: trim + zdejmij cudzyslowy (hPanel czasem zapisuje je doslownie). */
-function secretStr(name, fallback = "") {
-    let value = str(name, fallback).trim();
+export function normalizeSecret(raw) {
+    let value = (raw ?? "").replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
     if ((value.startsWith('"') && value.endsWith('"') && value.length >= 2) ||
         (value.startsWith("'") && value.endsWith("'") && value.length >= 2)) {
-        value = value.slice(1, -1);
+        value = value.slice(1, -1).trim();
+    }
+    // Hostinger / panele czasem trzymaja MalinA666%23 zamiast MalinA666#
+    if (value.includes("%")) {
+        try {
+            const decoded = decodeURIComponent(value);
+            if (decoded)
+                value = decoded;
+        }
+        catch {
+            /* zostaw surowe */
+        }
     }
     return value;
+}
+function secretStr(name, fallback = "") {
+    return normalizeSecret(str(name, fallback));
+}
+/**
+ * Haslo bramki — czytane na zywo z process.env (po restarcie hPanel bez redeployu).
+ * Preferuj SITE_GATE_PASSWORD_B64 (base64), gdy zwykle haslo psuje sie przez znak #.
+ */
+export function getSiteGatePassword() {
+    const b64 = str("SITE_GATE_PASSWORD_B64").trim();
+    if (b64) {
+        try {
+            return normalizeSecret(Buffer.from(b64, "base64").toString("utf8"));
+        }
+        catch {
+            /* fall through */
+        }
+    }
+    return normalizeSecret(process.env["SITE_GATE_PASSWORD"]);
 }
 function int(name, fallback) {
     const parsed = Number.parseInt(str(name), 10);
@@ -140,11 +170,12 @@ export const config = {
     googleClientSecret: str("GOOGLE_CLIENT_SECRET"),
     allowedEmails: str("ALLOWED_EMAILS"),
     /**
-     * Haslo bramki przed panelem (SITE_GATE_PASSWORD).
-     * Puste = bramka wylaczona (np. lokalnie). Na morphyhub.com ustaw w hPanel
-     * BEZ cudzyslowow. Znak # w hasle jest OK w hPanel (nie w pliku .env bez "").
+     * Haslo bramki (snapshot przy starcie). Runtime: getSiteGatePassword().
+     * Lepiej SITE_GATE_PASSWORD_B64 gdy haslo zawiera #.
      */
-    siteGatePassword: secretStr("SITE_GATE_PASSWORD"),
+    get siteGatePassword() {
+        return getSiteGatePassword();
+    },
     db: resolvedDb.db,
     /** Blad konfiguracji DB z chwili importu (np. sqlite:// w DATABASE_URL). */
     dbConfigError: resolvedDb.error,

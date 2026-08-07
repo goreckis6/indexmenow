@@ -182,13 +182,18 @@ async function buildFullApp() {
     });
     app.use(express.urlencoded({ extended: true, limit: "2mb" }));
     app.use(express.json({ limit: "1mb" }));
-    // Przed sesja / auth — Hostinger i monitoring musza trafic w zywy JSON.
-    app.get("/healthz", (_req, res) => {
-        res.json({ status: "ok", app: config.appName, version: "1.0.0" });
-    });
     configureTemplates(app);
     // Bramka haslem (SITE_GATE_PASSWORD) — przed Google OAuth / panelem.
-    const { siteGate, handleGateLogin, handleGateLogout, hasGateAccess } = await import("./middleware/siteGate.js");
+    const { siteGate, handleGateLogin, handleGateLogout, hasGateAccess, siteGateHealth } = await import("./middleware/siteGate.js");
+    // Przed sesja / auth — Hostinger i monitoring musza trafic w zywy JSON.
+    app.get("/healthz", (_req, res) => {
+        res.json({
+            status: "ok",
+            app: config.appName,
+            version: "1.0.0",
+            gate: siteGateHealth(),
+        });
+    });
     app.get("/gate", (req, res) => {
         if (!config.siteGatePassword) {
             res.redirect(303, "/");

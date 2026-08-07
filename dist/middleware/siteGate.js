@@ -1,16 +1,23 @@
 import crypto from "node:crypto";
-import { config } from "../config.js";
+import { config, getSiteGatePassword } from "../config.js";
 import { applyNoStore, saveSession } from "./auth.js";
 /** Zapamietanie wejscia przez bramke — 90 dni. */
 const GATE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const GATE_COOKIE = "imp_gate";
+function normalizePassword(value) {
+    return value.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
+}
 function passwordMatches(candidate, expected) {
-    // Trim tylko z koncow — haslo moze miec spacje w srodku; hPanel czasem dokleja \r\n.
-    const leftRaw = candidate.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trimEnd();
-    const rightRaw = expected.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trimEnd();
+    const leftRaw = normalizePassword(candidate);
+    const rightRaw = normalizePassword(expected);
+    if (!leftRaw || !rightRaw)
+        return false;
     const left = crypto.createHash("sha256").update(leftRaw, "utf8").digest();
     const right = crypto.createHash("sha256").update(rightRaw, "utf8").digest();
     return crypto.timingSafeEqual(left, right);
+}
+function passwordFingerprint(value) {
+    return crypto.createHash("sha256").update(normalizePassword(value), "utf8").digest("hex").slice(0, 8);
 }
 function readCookie(req, name) {
     const raw = req.headers.cookie;
@@ -100,12 +107,11 @@ function isGateExempt(req) {
         path === "/gate/logout");
 }
 export const siteGate = (req, res, next) => {
-    if (!config.siteGatePassword)
+    if (!getSiteGatePassword())
         return next();
     if (isGateExempt(req))
         return next();
     if (hasGateAccess(req)) {
-        // Synchronizuj flage sesji, gdy wpuscilo samo cookie (np. po restartcie sesji).
         if (!req.session.site_gate && gateCookieValid(req)) {
             req.session.site_gate = true;
         }
@@ -119,22 +125,31 @@ export const siteGate = (req, res, next) => {
     renderGate(res);
 };
 export async function handleGateLogin(req, res) {
-    if (!config.siteGatePassword) {
+    const expected = getSiteGatePassword();
+    if (!expected) {
         res.redirect(303, "/");
         return;
     }
-    const password = String(req.body.password ?? "");
-    if (!password || !passwordMatches(password, config.siteGatePassword)) {
+    const body = req.body;
+    const password = typeof body?.password === "string" ? body.password : "";
+    const got = normalizePassword(password);
+    if (!got) {
+        console.warn(`Gate login: puste haslo w body (keys=${body ? Object.keys(body).join(",") : "no-body"} content-type=${req.headers["content-type"] || "-"})`);
+        renderGate(res, "Nieprawidlowe haslo.");
+        return;
+    }
+    if (!passwordMatches(got, expected)) {
+        console.warn(`Gate login fail: got_len=${got.length} exp_len=${expected.length} ` +
+            `got_fp=${passwordFingerprint(got)} exp_fp=${passwordFingerprint(expected)} ` +
+            `exp_last_code=${expected.charCodeAt(expected.length - 1)}`);
         renderGate(res, "Nieprawidlowe haslo.");
         return;
     }
     req.session.site_gate = true;
     setGateCookie(res);
     await saveSession(req);
-    const nextUrl = typeof req.body.next === "string" &&
-        req.body.next.startsWith("/") &&
-        !req.body.next.startsWith("//")
-        ? req.body.next
+    const nextUrl = typeof body?.next === "string" && body.next.startsWith("/") && !body.next.startsWith("//")
+        ? body.next
         : "/";
     applyNoStore(res);
     res.redirect(303, nextUrl);
@@ -145,5 +160,13 @@ export async function handleGateLogout(req, res, _next) {
     await saveSession(req);
     applyNoStore(res);
     res.redirect(303, "/gate");
+}
+export function siteGateHealth() {
+    const password = getSiteGatePassword();
+    return {
+        enabled: Boolean(password),
+        len: password.length,
+        fp: password ? passwordFingerprint(password) : "",
+    };
 }
 //# sourceMappingURL=siteGate.js.map
