@@ -29,7 +29,7 @@ Schemat tabel tworzy się sam przy pierwszym starcie aplikacji (`migrate`).
 | Pole | Wartość |
 |---|---|
 | Framework | **Express** (albo *Other*) |
-| Node.js | **20** lub **22** |
+| Node.js | **22** (wymagane — zależnosci nie działają na 20) |
 | Root directory | `/` (puste) |
 | Build command / script | `build` (= `npm run build`) |
 | Output directory | `dist` |
