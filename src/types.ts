@@ -14,6 +14,7 @@ declare module "express-session" {
     workspace_id?: number;
     oauth_state?: string;
     oauth_next?: string;
+    site_gate?: boolean;
     _flashes?: FlashMessage[];
   }
 }

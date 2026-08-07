@@ -217,6 +217,28 @@ async function buildFullApp(): Promise<express.Express> {
   });
 
   configureTemplates(app);
+
+  // Bramka haslem (SITE_GATE_PASSWORD) — przed Google OAuth / panelem.
+  const { siteGate, handleGateLogin, handleGateLogout } = await import("./middleware/siteGate.js");
+  app.get("/gate", (req, res) => {
+    if (!config.siteGatePassword) {
+      res.redirect(303, "/");
+      return;
+    }
+    if (req.session?.site_gate) {
+      res.redirect(303, "/");
+      return;
+    }
+    res.status(200).render("gate.html", { app_name: config.appName, error: "" });
+  });
+  app.post("/gate/login", (req, res, next) => {
+    void handleGateLogin(req, res).catch(next);
+  });
+  app.post("/gate/logout", (req, res, next) => {
+    void handleGateLogout(req, res, next).catch(next);
+  });
+  app.use(siteGate);
+
   app.use(loadUser);
 
   const upload = multer({

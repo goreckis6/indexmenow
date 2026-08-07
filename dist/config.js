@@ -123,13 +123,18 @@ export const config = {
     baseUrl,
     secretKey,
     /** Query ?v= na CSS/JS — bust cache CDN po deployu. */
-    assetVersion: str("ASSET_VERSION", "20260807d"),
+    assetVersion: str("ASSET_VERSION", "20260807e"),
     debug: bool("DEBUG", false),
     logLevel: str("LOG_LEVEL", "INFO"),
     timezone: str("TIMEZONE", "Europe/Warsaw"),
     googleClientId: str("GOOGLE_CLIENT_ID"),
     googleClientSecret: str("GOOGLE_CLIENT_SECRET"),
     allowedEmails: str("ALLOWED_EMAILS"),
+    /**
+     * Haslo bramki przed panelem (SITE_GATE_PASSWORD).
+     * Puste = bramka wylaczona (np. lokalnie). Na morphyhub.com ustaw w hPanel.
+     */
+    siteGatePassword: str("SITE_GATE_PASSWORD"),
     db: resolvedDb.db,
     /** Blad konfiguracji DB z chwili importu (np. sqlite:// w DATABASE_URL). */
     dbConfigError: resolvedDb.error,

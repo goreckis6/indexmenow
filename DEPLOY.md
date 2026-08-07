@@ -92,7 +92,10 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ALLOWED_EMAILS=slavomir.gorecki@gmail.com
 TIMEZONE=Europe/Warsaw
 SCHEDULER_ENABLED=true
+SITE_GATE_PASSWORD=twoje-haslo-bramki
 ```
+
+`SITE_GATE_PASSWORD` — hasło przed całym panelem (ekran „Podaj hasło”). Puste / brak zmiennej = bramka wyłączona. W hPanel wklej wartość **bez** cudzysłowów (panel nie traktuje `#` jako komentarza).
 
 ### Opcjonalne
 
