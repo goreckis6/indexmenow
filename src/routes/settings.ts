@@ -107,14 +107,17 @@ settingsRouter.post(
   asyncHandler(async (req, res) => {
     const workspace = req.workspace!;
     const file = req.file;
-    if (!file?.buffer) {
-      flash(req, "Wybierz plik JSON konta serwisowego.", "error");
+    const pasted = String(req.body.json_text ?? "").trim();
+    const raw = file?.buffer ? file.buffer.toString("utf8") : pasted;
+
+    if (!raw) {
+      flash(req, "Wklej JSON konta serwisowego albo wybierz plik .json.", "error");
       return res.redirect(303, "/settings");
     }
 
     let info;
     try {
-      info = parseServiceAccountJson(file.buffer.toString("utf8"));
+      info = parseServiceAccountJson(raw);
       await getServiceAccountToken(info);
     } catch (error) {
       const message = error instanceof GoogleApiError ? error.toString() : String(error);

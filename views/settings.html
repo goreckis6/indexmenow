@@ -96,10 +96,17 @@
         {% endif %}
 
         <form method="post" action="/settings/service-account" enctype="multipart/form-data" data-busy>
+          <div class="field mb-2">
+            <label class="lbl">JSON konta serwisowego (wklej z reki)</label>
+            <textarea class="input" name="json_text" rows="8"
+              placeholder='{ "type": "service_account", "project_id": "...", "private_key_id": "...", "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n", "client_email": "...@....iam.gserviceaccount.com", ... }'
+              style="font-family:ui-monospace,monospace;font-size:0.78rem"></textarea>
+            <div class="hint">Skopiuj cala zawartosc pliku .json z Google Cloud i wklej tutaj.</div>
+          </div>
           <div class="form-row three">
             <div class="field">
-              <label class="lbl">Plik JSON konta serwisowego</label>
-              <input class="input" type="file" name="file" accept=".json" required>
+              <label class="lbl">Albo plik .json</label>
+              <input class="input" type="file" name="file" accept=".json,application/json">
             </div>
             <div class="field">
               <label class="lbl">Etykieta</label>

@@ -277,21 +277,24 @@
     const indicator = document.querySelector("[data-task-indicator]");
     if (!indicator) return;
 
-    let wasBusy = indicator.dataset.busy === "1";
     const poll = () => {
-      fetch("/api/tasks", { headers: { Accept: "application/json" } })
+      fetch("/api/tasks", { headers: { Accept: "application/json" }, credentials: "same-origin" })
         .then((response) => (response.ok ? response.json() : null))
         .then((data) => {
-          if (!data) return;
+          if (!data || typeof data.busy !== "boolean") return;
+          // Tylko aktualizuj badge — NIE reloaduj strony.
+          // Na Hostingerze jest kilka instancji Node; runningTasks() jest
+          // w pamieci procesu, wiec busy miga true/false i reload robil petle.
           indicator.classList.toggle("hidden", !data.busy);
-          if (wasBusy && !data.busy) {
-            window.location.reload();
+          if (data.busy) {
+            indicator.dataset.busy = "1";
+          } else {
+            indicator.dataset.busy = "0";
           }
-          wasBusy = data.busy;
         })
         .catch(() => {});
     };
-    setInterval(poll, 5000);
+    setInterval(poll, 8000);
     poll();
   }
 

@@ -86,7 +86,8 @@
               <input type="hidden" name="redirect" value="/sites">
               <label class="switch" title="{{ 'Wylacz' if row.site.auto_index else 'Wlacz' }} auto-indeks">
                 <input type="checkbox" {% if row.site.auto_index %}checked{% endif %}
-                       onchange="this.form.requestSubmit()">
+                       onchange="this.form.requestSubmit()"
+                       onclick="event.stopPropagation()">
                 <span class="track"></span>
               </label>
               <span class="tiny muted" style="margin-left:8px;white-space:nowrap">
