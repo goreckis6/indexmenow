@@ -17,7 +17,6 @@ import {
 } from "../middleware/auth.js";
 import { logEvent } from "../services/activity.js";
 import { createDefaultWorkspace } from "../services/workspaces.js";
-import { baseContext } from "../templating.js";
 
 export const authRouter = Router();
 
