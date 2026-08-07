@@ -28,6 +28,10 @@ export function normalizeSecret(raw) {
             /* zostaw surowe */
         }
     }
+    // hPanel / shell często zapisuje \# zamiast samego #
+    if (value.includes("\\#")) {
+        value = value.replace(/\\#/g, "#");
+    }
     return value;
 }
 function secretStr(name, fallback = "") {

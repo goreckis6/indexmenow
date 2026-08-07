@@ -33,6 +33,10 @@ export function normalizeSecret(raw: string | undefined | null): string {
       /* zostaw surowe */
     }
   }
+  // hPanel / shell często zapisuje \# zamiast samego #
+  if (value.includes("\\#")) {
+    value = value.replace(/\\#/g, "#");
+  }
   return value;
 }
 
