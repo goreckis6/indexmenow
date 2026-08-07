@@ -14,5 +14,6 @@ data/
 .idea/
 .vscode/
 node_modules/
-dist/
+# dist/ jest w repo jako zapas - Hostinger czasem pomija devDependencies
+# i wtedy tsc nie ma typow. Build i tak nadpisze dist przy udanym tsc.
 *.tsbuildinfo
