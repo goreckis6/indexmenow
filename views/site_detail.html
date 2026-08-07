@@ -361,7 +361,7 @@
           <div class="field">
             <label class="lbl">Dzienny limit zgloszen</label>
             <input class="input" type="number" name="daily_limit" min="0" max="10000" value="{{ site.daily_limit }}">
-            <div class="hint">Ile URL-i z tej strony moze byc zgloszonych w jednym przebiegu.</div>
+            <div class="hint">Ile URL-i z tej strony w jednym przebiegu auto-indeksu (dziala gdy auto jest ON).</div>
           </div>
           <div class="field">
             <label class="lbl">Priorytet</label>
@@ -373,8 +373,24 @@
         <div class="divider"></div>
 
         <div class="switch-row">
-          <label class="switch"><input type="checkbox" name="auto_index" value="true" {% if site.auto_index %}checked{% endif %}><span class="track"></span></label>
-          <div class="txt"><strong>Auto-indeksowanie</strong><span>Codzienny skan sitemap, inspekcja i zgloszenia bez Twojego udzialu</span></div>
+          <form method="post" action="/sites/{{ site.id }}/toggle-auto" class="auto-toggle" style="display:contents">
+            <input type="hidden" name="redirect" value="/sites/{{ site.id }}?tab=settings">
+            <label class="switch" title="Przelacz auto-indeks">
+              <input type="checkbox" {% if site.auto_index %}checked{% endif %}
+                     onchange="this.form.requestSubmit()">
+              <span class="track"></span>
+            </label>
+          </form>
+          <div class="txt">
+            <strong>Auto-indeksowanie</strong>
+            <span>
+              {% if site.auto_index %}
+                Wlaczone — do {{ site.daily_limit }} URL/dzien (przelacznik zapisuje od razu).
+              {% else %}
+                Wylaczone — wlacz przełącznikiem, potem ustaw limit ponizej i zapisz.
+              {% endif %}
+            </span>
+          </div>
         </div>
         <div class="switch-row">
           <label class="switch"><input type="checkbox" name="indexnow_enabled" value="true" {% if site.indexnow_enabled %}checked{% endif %}><span class="track"></span></label>

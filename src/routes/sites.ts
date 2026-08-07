@@ -175,7 +175,6 @@ sitesRouter.post(
     const displayName = String(req.body.display_name ?? "").trim();
     const dailyLimit = Math.max(0, Math.min(Number(req.body.daily_limit) || 50, 10_000));
     const priority = Math.max(0, Math.min(Number(req.body.priority) || 0, 100));
-    const autoIndex = formBool(req.body.auto_index);
     const indexnowEnabled = formBool(req.body.indexnow_enabled);
     const isActive = formBool(req.body.is_active);
 
@@ -185,7 +184,7 @@ sitesRouter.post(
         ...(displayName ? { display_name: displayName.slice(0, 255) } : {}),
         daily_limit: dailyLimit,
         priority,
-        auto_index: autoIndex,
+        // auto_index ma wlasny endpoint /toggle-auto — nie nadpisuj go tu
         indexnow_enabled: indexnowEnabled,
         is_active: isActive,
         ...(indexnowEnabled && !site.indexnow_key

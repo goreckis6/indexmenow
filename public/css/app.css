@@ -345,6 +345,13 @@ label.lbl { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom:
 .switch input:checked + .track::before { transform: translateX(18px); }
 .switch input:focus-visible + .track { box-shadow: 0 0 0 3px var(--brand-ring); }
 
+form.auto-toggle {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  vertical-align: middle;
+}
+
 .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
 .filters .field { margin: 0; min-width: 150px; }
 
