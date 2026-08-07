@@ -154,7 +154,10 @@ sitesRouter.post("/:siteId/settings", asyncHandler(async (req, res) => {
 }));
 sitesRouter.post("/:siteId/toggle-auto", asyncHandler(async (req, res) => {
     const site = await requireSite(req, Number(req.params.siteId));
-    const enabled = !site.auto_index;
+    // Stan z checkboxa po onchange (nie !db — unikamy race / zlej konwersji TINYINT).
+    const enabled = "enabled" in req.body
+        ? formBool(req.body.enabled)
+        : !Boolean(site.auto_index);
     await db
         .updateTable("sites")
         .set({ auto_index: enabled })

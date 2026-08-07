@@ -16,7 +16,9 @@ export const pool = mysql.createPool({
   timezone: "Z",
   dateStrings: ["DATE"],
   typeCast(field, next) {
-    if (field.type === "TINY" && field.length === 1) {
+    // MySQL 8+ czesto zwraca length != 1 dla TINYINT(1) — bez tego
+    // boolean bywa liczba/Buffer i UI/toggle zachowuje sie dziwnie.
+    if (field.type === "TINY") {
       const value = field.string();
       return value === null ? null : value === "1";
     }

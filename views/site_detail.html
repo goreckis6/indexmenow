@@ -352,6 +352,31 @@
   <div class="card">
     <div class="card-head"><h2>Ustawienia strony</h2></div>
     <div class="card-body">
+      {# Osobny form — nie wolno zagniezdzac <form> w formularzu „Zapisz ustawienia”. #}
+      <div class="switch-row mb-2">
+        <form method="post" action="/sites/{{ site.id }}/toggle-auto" class="auto-toggle">
+          <input type="hidden" name="redirect" value="/sites/{{ site.id }}?tab=settings">
+          <label class="switch" title="Przelacz auto-indeks">
+            <input type="checkbox" name="enabled" value="true"
+                   {% if site.auto_index %}checked{% endif %}
+                   onchange="this.form.requestSubmit()">
+            <span class="track"></span>
+          </label>
+        </form>
+        <div class="txt">
+          <strong>Auto-indeksowanie</strong>
+          <span>
+            {% if site.auto_index %}
+              Wlaczone — do {{ site.daily_limit }} URL/dzien (zapis natychmiast).
+            {% else %}
+              Wylaczone — wlacz przełącznikiem (zapis natychmiast).
+            {% endif %}
+          </span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
       <form method="post" action="/sites/{{ site.id }}/settings" data-busy>
         <div class="field">
           <label class="lbl">Nazwa wyswietlana</label>
@@ -372,26 +397,6 @@
 
         <div class="divider"></div>
 
-        <div class="switch-row">
-          <form method="post" action="/sites/{{ site.id }}/toggle-auto" class="auto-toggle" style="display:contents">
-            <input type="hidden" name="redirect" value="/sites/{{ site.id }}?tab=settings">
-            <label class="switch" title="Przelacz auto-indeks">
-              <input type="checkbox" {% if site.auto_index %}checked{% endif %}
-                     onchange="this.form.requestSubmit()">
-              <span class="track"></span>
-            </label>
-          </form>
-          <div class="txt">
-            <strong>Auto-indeksowanie</strong>
-            <span>
-              {% if site.auto_index %}
-                Wlaczone — do {{ site.daily_limit }} URL/dzien (przelacznik zapisuje od razu).
-              {% else %}
-                Wylaczone — wlacz przełącznikiem, potem ustaw limit ponizej i zapisz.
-              {% endif %}
-            </span>
-          </div>
-        </div>
         <div class="switch-row">
           <label class="switch"><input type="checkbox" name="indexnow_enabled" value="true" {% if site.indexnow_enabled %}checked{% endif %}><span class="track"></span></label>
           <div class="txt"><strong>IndexNow</strong><span>Rownolegle zglaszaj adresy do Bing, Yandex i Seznam</span></div>

@@ -85,7 +85,8 @@
             <form method="post" action="/sites/{{ row.site.id }}/toggle-auto" class="auto-toggle">
               <input type="hidden" name="redirect" value="/sites">
               <label class="switch" title="{{ 'Wylacz' if row.site.auto_index else 'Wlacz' }} auto-indeks">
-                <input type="checkbox" {% if row.site.auto_index %}checked{% endif %}
+                <input type="checkbox" name="enabled" value="true"
+                       {% if row.site.auto_index %}checked{% endif %}
                        onchange="this.form.requestSubmit()"
                        onclick="event.stopPropagation()">
                 <span class="track"></span>
