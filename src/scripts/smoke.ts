@@ -6,16 +6,16 @@
  *   npm run smoke
  */
 import assert from "node:assert/strict";
-import { db } from "../db";
-import { migrate } from "../db/migrate";
-import { decrypt, encrypt } from "../lib/crypto";
-import { IndexStatus, JobStatus, JobType } from "../db/types";
-import * as quota from "../services/quota";
-import { addUrls, normalizeUrl } from "../services/urls";
-import { createWorkspace } from "../services/workspaces";
-import { recordSiteSnapshot } from "../services/stats";
-import { schedulerStatus } from "../services/scheduler";
-import { todayIso } from "../lib/dates";
+import { db } from "../db/index.js";
+import { migrate } from "../db/migrate.js";
+import { decrypt, encrypt } from "../lib/crypto.js";
+import { IndexStatus, JobStatus, JobType } from "../db/types.js";
+import * as quota from "../services/quota.js";
+import { addUrls, normalizeUrl } from "../services/urls.js";
+import { createWorkspace } from "../services/workspaces.js";
+import { recordSiteSnapshot } from "../services/stats.js";
+import { schedulerStatus } from "../services/scheduler.js";
+import { todayIso } from "../lib/dates.js";
 
 const checks: string[] = [];
 function ok(name: string): void {

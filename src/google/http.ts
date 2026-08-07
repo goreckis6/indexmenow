@@ -1,4 +1,4 @@
-import { GoogleApiError, parseError, safeJson } from "./errors";
+import { GoogleApiError, parseError, safeJson } from "./errors.js";
 
 const TIMEOUT_MS = 45_000;
 

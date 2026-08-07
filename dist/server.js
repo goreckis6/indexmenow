@@ -1,30 +1,25 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.startFromBootloader = startFromBootloader;
-const node_path_1 = __importDefault(require("node:path"));
-const express_1 = __importDefault(require("express"));
-const express_session_1 = __importDefault(require("express-session"));
-const express_mysql_session_1 = __importDefault(require("express-mysql-session"));
-const multer_1 = __importDefault(require("multer"));
-const config_1 = require("./config");
-const db_1 = require("./db");
-const migrate_1 = require("./db/migrate");
-const auth_1 = require("./middleware/auth");
-const api_1 = require("./routes/api");
-const auth_2 = require("./routes/auth");
-const dashboard_1 = require("./routes/dashboard");
-const history_1 = require("./routes/history");
-const settings_1 = require("./routes/settings");
-const sites_1 = require("./routes/sites");
-const tools_1 = require("./routes/tools");
-const urls_1 = require("./routes/urls");
-const scheduler_1 = require("./services/scheduler");
-const templating_1 = require("./templating");
-require("./types");
-const MySQLStore = (0, express_mysql_session_1.default)(express_session_1.default);
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import express from "express";
+import session from "express-session";
+import MySQLStoreFactory from "express-mysql-session";
+import multer from "multer";
+import { config, ROOT_DIR } from "./config.js";
+import { closeDatabase, pingDatabase, pool } from "./db/index.js";
+import { migrate } from "./db/migrate.js";
+import { HttpError, loadUser } from "./middleware/auth.js";
+import { apiRouter } from "./routes/api.js";
+import { authRouter } from "./routes/auth.js";
+import { dashboardRouter } from "./routes/dashboard.js";
+import { historyRouter } from "./routes/history.js";
+import { settingsRouter } from "./routes/settings.js";
+import { sitesRouter } from "./routes/sites.js";
+import { toolsRouter } from "./routes/tools.js";
+import { urlsRouter } from "./routes/urls.js";
+import { shutdownScheduler, startScheduler } from "./services/scheduler.js";
+import { baseContext, configureTemplates } from "./templating.js";
+import "./types.js";
+const MySQLStore = MySQLStoreFactory(session);
 function envPresenceLine() {
     return (`Env: PORT=${process.env["PORT"] ? "set" : "MISSING"} ` +
         `DB_HOST=${process.env["DB_HOST"] || process.env["MYSQL_HOST"] ? "set" : "MISSING"} ` +
@@ -97,13 +92,13 @@ ALLOWED_EMAILS=twoj@email.com</pre>
 </html>`;
 }
 function buildDiagnosticApp(reason) {
-    const app = (0, express_1.default)();
+    const app = express();
     app.set("trust proxy", 1);
     app.get("/healthz", (_req, res) => {
         res.status(503).json({
             status: "misconfigured",
-            app: config_1.config.appName,
-            port: config_1.config.port,
+            app: config.appName,
+            port: config.port,
             error: reason,
             env: {
                 PORT: Boolean(process.env["PORT"]),
@@ -122,7 +117,7 @@ function buildDiagnosticApp(reason) {
     return app;
 }
 async function buildFullApp() {
-    const app = (0, express_1.default)();
+    const app = express();
     app.set("trust proxy", 1);
     const sessionStore = new MySQLStore({
         clearExpired: true,
@@ -137,46 +132,46 @@ async function buildFullApp() {
                 data: "data",
             },
         },
-    }, db_1.pool);
-    app.use((0, express_session_1.default)({
+    }, pool);
+    app.use(session({
         name: "imp_session",
-        secret: config_1.config.secretKey,
+        secret: config.secretKey,
         resave: false,
         saveUninitialized: false,
         store: sessionStore,
         cookie: {
             maxAge: 30 * 24 * 60 * 60 * 1000,
             sameSite: "lax",
-            secure: config_1.config.isHttps,
+            secure: config.isHttps,
             httpOnly: true,
         },
     }));
-    app.use(express_1.default.urlencoded({ extended: true, limit: "2mb" }));
-    app.use(express_1.default.json({ limit: "1mb" }));
-    app.use("/static", express_1.default.static(node_path_1.default.join(config_1.ROOT_DIR, "public"), { maxAge: "1d" }));
+    app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+    app.use(express.json({ limit: "1mb" }));
+    app.use("/static", express.static(path.join(ROOT_DIR, "public"), { maxAge: "1d" }));
     // Przed sesja / auth — Hostinger i monitoring musza trafic w zywy JSON.
     app.get("/healthz", (_req, res) => {
-        res.json({ status: "ok", app: config_1.config.appName, version: "1.0.0" });
+        res.json({ status: "ok", app: config.appName, version: "1.0.0" });
     });
-    (0, templating_1.configureTemplates)(app);
-    app.use(auth_1.loadUser);
-    const upload = (0, multer_1.default)({
-        storage: multer_1.default.memoryStorage(),
+    configureTemplates(app);
+    app.use(loadUser);
+    const upload = multer({
+        storage: multer.memoryStorage(),
         limits: { fileSize: 2 * 1024 * 1024 },
     });
     app.use("/urls/add", upload.single("file"));
     app.use("/settings/service-account", upload.single("file"));
-    app.use(auth_2.authRouter);
-    app.use(dashboard_1.dashboardRouter);
-    app.use("/sites", sites_1.sitesRouter);
-    app.use("/urls", urls_1.urlsRouter);
-    app.use("/history", history_1.historyRouter);
-    app.use("/settings", settings_1.settingsRouter);
-    app.use("/tools", tools_1.toolsRouter);
-    app.use("/api", api_1.apiRouter);
+    app.use(authRouter);
+    app.use(dashboardRouter);
+    app.use("/sites", sitesRouter);
+    app.use("/urls", urlsRouter);
+    app.use("/history", historyRouter);
+    app.use("/settings", settingsRouter);
+    app.use("/tools", toolsRouter);
+    app.use("/api", apiRouter);
     app.use((err, req, res, _next) => {
-        const status = err instanceof auth_1.HttpError ? err.status : 500;
-        const detail = err instanceof auth_1.HttpError
+        const status = err instanceof HttpError ? err.status : 500;
+        const detail = err instanceof HttpError
             ? err.message
             : err instanceof Error
                 ? err.message
@@ -188,20 +183,20 @@ async function buildFullApp() {
             return;
         }
         if (status === 404) {
-            res.status(404).render("errors/404.html", (0, templating_1.baseContext)(req));
+            res.status(404).render("errors/404.html", baseContext(req));
             return;
         }
-        res.status(status).render("errors/generic.html", (0, templating_1.baseContext)(req, { status_code: status, detail }));
+        res.status(status).render("errors/generic.html", baseContext(req, { status_code: status, detail }));
     });
     app.use((req, res) => {
         if (req.path.startsWith("/api/")) {
             res.status(404).json({ detail: "Nie znaleziono" });
             return;
         }
-        res.status(404).render("errors/404.html", (0, templating_1.baseContext)(req));
+        res.status(404).render("errors/404.html", baseContext(req));
     });
-    await (0, scheduler_1.startScheduler)();
-    if (!config_1.config.googleConfigured) {
+    await startScheduler();
+    if (!config.googleConfigured) {
         console.warn("Brak GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET - logowanie bedzie niedostepne.");
     }
     return app;
@@ -210,29 +205,29 @@ async function buildFullApp() {
  * Buduje aplikacje Express BEZ listen().
  * Uzywane przez rootowy server.js (bootloader Hostingera).
  */
-async function startFromBootloader() {
-    console.log(`Start ${config_1.config.appName}: PORT=${config_1.config.port} BASE_URL=${config_1.config.baseUrl} ` +
-        `DB=${config_1.config.db.user}@${config_1.config.db.host}:${config_1.config.db.port}/${config_1.config.db.database}`);
+export async function startFromBootloader() {
+    console.log(`Start ${config.appName}: PORT=${config.port} BASE_URL=${config.baseUrl} ` +
+        `DB=${config.db.user}@${config.db.host}:${config.db.port}/${config.db.database}`);
     console.log(envPresenceLine());
-    if (config_1.config.dbConfigError) {
-        console.error(config_1.config.dbConfigError);
-        return buildDiagnosticApp(config_1.config.dbConfigError);
+    if (config.dbConfigError) {
+        console.error(config.dbConfigError);
+        return buildDiagnosticApp(config.dbConfigError);
     }
-    if (config_1.config.isHttps && !process.env["PORT"]) {
+    if (config.isHttps && !process.env["PORT"]) {
         console.warn("Uwaga: brak zmiennej PORT. Hostinger powinien ja ustawic sam. " +
             "Jesli jej nie ma, proxy nie trafi w proces i zobaczysz 503 CDN.");
     }
     const missing = collectMissingEnv();
-    if (config_1.config.isHttps && missing.length > 0) {
+    if (config.isHttps && missing.length > 0) {
         const reason = `Brak wymaganych zmiennych w hPanel: ${missing.join(", ")}. ` +
             "Websites → Twoja strona → Environment variables.";
         console.error(reason);
         return buildDiagnosticApp(reason);
     }
     try {
-        await (0, db_1.pingDatabase)();
+        await pingDatabase();
         console.log("Polaczenie z MySQL OK.");
-        await (0, migrate_1.migrate)();
+        await migrate();
         console.log("Migracja schematu MySQL OK.");
     }
     catch (error) {
@@ -244,25 +239,25 @@ async function startFromBootloader() {
 }
 async function listenDirectly() {
     const app = await startFromBootloader();
-    const port = config_1.config.port;
+    const port = config.port;
     const server = app.listen(port, () => {
-        console.log(`${config_1.config.appName} nasluchuje na porcie ${port} (BASE_URL=${config_1.config.baseUrl})`);
+        console.log(`${config.appName} nasluchuje na porcie ${port} (BASE_URL=${config.baseUrl})`);
     });
     const shutdown = async (signal) => {
         console.log(`Otrzymano ${signal}, zamykam...`);
-        await (0, scheduler_1.shutdownScheduler)().catch(() => undefined);
+        await shutdownScheduler().catch(() => undefined);
         server.close(async () => {
-            await (0, db_1.closeDatabase)().catch(() => undefined);
+            await closeDatabase().catch(() => undefined);
             process.exit(0);
         });
     };
     process.on("SIGINT", () => void shutdown("SIGINT"));
     process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
-// Uruchomienie bezposrednie: `node dist/server.js` / `tsx src/server.ts`
-const isDirectRun = typeof require !== "undefined" &&
-    typeof module !== "undefined" &&
-    require.main === module;
+// Uruchomienie bezposrednie: `node dist/server.js`
+const isDirectRun = process.argv[1]
+    ? path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+    : false;
 if (isDirectRun) {
     listenDirectly().catch((error) => {
         console.error("Nie udalo sie uruchomic aplikacji:", error);

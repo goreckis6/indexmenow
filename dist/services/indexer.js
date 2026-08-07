@@ -1,61 +1,18 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.resolveIndexingToken = resolveIndexingToken;
-exports.mapIndexStatus = mapIndexStatus;
-exports.inspectSingle = inspectSingle;
-exports.inspectBatch = inspectBatch;
-exports.submitSingle = submitSingle;
-exports.submitBatch = submitBatch;
-exports.submitIndexNow = submitIndexNow;
-exports.runSitePipeline = runSitePipeline;
-const config_1 = require("../config");
-const db_1 = require("../db");
-const types_1 = require("../db/types");
-const errors_1 = require("../google/errors");
-const indexing = __importStar(require("../google/indexing"));
-const indexnow = __importStar(require("../google/indexnow"));
-const oauth_1 = require("../google/oauth");
-const gsc = __importStar(require("../google/searchConsole"));
-const serviceAccount_1 = require("../google/serviceAccount");
-const crypto_1 = require("../lib/crypto");
-const activity_1 = require("./activity");
-const quota = __importStar(require("./quota"));
-const sitemaps_1 = require("./sitemaps");
-const stats_1 = require("./stats");
-const urls_1 = require("./urls");
+import { config } from "../config.js";
+import { db } from "../db/index.js";
+import { Engine, IndexStatus, JobStatus, JobType, } from "../db/types.js";
+import { GoogleApiError } from "../google/errors.js";
+import * as indexing from "../google/indexing.js";
+import * as indexnow from "../google/indexnow.js";
+import { getAccessToken } from "../google/oauth.js";
+import * as gsc from "../google/searchConsole.js";
+import { credentialsInfo, getServiceAccountToken } from "../google/serviceAccount.js";
+import { decrypt } from "../lib/crypto.js";
+import { logEvent } from "./activity.js";
+import * as quota from "./quota.js";
+import { scanAllSitemaps } from "./sitemaps.js";
+import { recordSiteSnapshot } from "./stats.js";
+import { pickUrlsForInspection, pickUrlsForSubmission } from "./urls.js";
 const EXCLUSION_MARKERS = [
     "excluded",
     "duplicate",
@@ -76,8 +33,8 @@ function sleep(seconds) {
  * tokenem OAuth uzytkownika - dzieki temu limit konta Google zostaje wolny
  * na inspekcje URL-i.
  */
-async function resolveIndexingToken(userId, userEmail, workspace) {
-    const account = await db_1.db
+export async function resolveIndexingToken(userId, userEmail, workspace) {
+    const account = await db
         .selectFrom("service_accounts")
         .selectAll()
         .where("workspace_id", "=", workspace.id)
@@ -86,11 +43,11 @@ async function resolveIndexingToken(userId, userEmail, workspace) {
         .orderBy("last_used_at", "asc")
         .executeTakeFirst();
     if (account) {
-        const privateKey = (0, crypto_1.decrypt)(account.private_key_enc);
+        const privateKey = decrypt(account.private_key_enc);
         if (privateKey) {
-            const info = (0, serviceAccount_1.credentialsInfo)(account.client_email, privateKey, account.project_id);
-            const token = await (0, serviceAccount_1.getServiceAccountToken)(info);
-            await db_1.db
+            const info = credentialsInfo(account.client_email, privateKey, account.project_id);
+            const token = await getServiceAccountToken(info);
+            await db
                 .updateTable("service_accounts")
                 .set({ last_used_at: new Date() })
                 .where("id", "=", account.id)
@@ -98,53 +55,53 @@ async function resolveIndexingToken(userId, userEmail, workspace) {
             return { token, label: `service-account:${account.client_email}` };
         }
     }
-    return { token: await (0, oauth_1.getAccessToken)(userId), label: `oauth:${userEmail}` };
+    return { token: await getAccessToken(userId), label: `oauth:${userEmail}` };
 }
-function mapIndexStatus(verdict, coverageState) {
+export function mapIndexStatus(verdict, coverageState) {
     const coverage = (coverageState ?? "").toLowerCase();
     if (verdict === "PASS")
-        return types_1.IndexStatus.INDEXED;
+        return IndexStatus.INDEXED;
     if (NOT_INDEXED_MARKERS.some((marker) => coverage.includes(marker))) {
-        return types_1.IndexStatus.NOT_INDEXED;
+        return IndexStatus.NOT_INDEXED;
     }
     if (EXCLUSION_MARKERS.some((marker) => coverage.includes(marker)))
-        return types_1.IndexStatus.EXCLUDED;
+        return IndexStatus.EXCLUDED;
     if (verdict === "FAIL" || verdict === "NEUTRAL" || verdict === "PARTIAL") {
-        return types_1.IndexStatus.NOT_INDEXED;
+        return IndexStatus.NOT_INDEXED;
     }
-    return types_1.IndexStatus.UNKNOWN;
+    return IndexStatus.UNKNOWN;
 }
 function trim(value, length) {
     if (!value)
         return null;
     return value.slice(0, length) || null;
 }
-async function inspectSingle(userId, site, page, triggeredBy = "manual") {
-    const inserted = await db_1.db
+export async function inspectSingle(userId, site, page, triggeredBy = "manual") {
+    const inserted = await db
         .insertInto("index_jobs")
         .values({
         site_id: site.id,
         url_id: page.id,
         target: page.url.slice(0, 2048),
-        job_type: types_1.JobType.INSPECT,
-        engine: types_1.Engine.GOOGLE,
-        status: types_1.JobStatus.RUNNING,
+        job_type: JobType.INSPECT,
+        engine: Engine.GOOGLE,
+        status: JobStatus.RUNNING,
         triggered_by: triggeredBy,
     })
         .executeTakeFirst();
     const jobId = Number(inserted.insertId);
     const started = process.hrtime.bigint();
-    let jobStatus = types_1.JobStatus.SUCCESS;
+    let jobStatus = JobStatus.SUCCESS;
     let message = "";
     let indexStatus = page.index_status;
     let payload = null;
     try {
-        const token = await (0, oauth_1.getAccessToken)(userId);
+        const token = await getAccessToken(userId);
         const result = await gsc.inspectUrl(token, site.property_url, page.url);
         const statusResult = result.inspectionResult?.indexStatusResult ?? {};
         indexStatus = mapIndexStatus(statusResult.verdict, statusResult.coverageState);
         const lastCrawl = statusResult.lastCrawlTime ? new Date(statusResult.lastCrawlTime) : null;
-        await db_1.db
+        await db
             .updateTable("urls")
             .set({
             index_status: indexStatus,
@@ -164,27 +121,27 @@ async function inspectSingle(userId, site, page, triggeredBy = "manual") {
         payload = statusResult;
     }
     catch (error) {
-        const reason = error instanceof errors_1.GoogleApiError ? error.toString() : String(error);
-        jobStatus = types_1.JobStatus.FAILED;
+        const reason = error instanceof GoogleApiError ? error.toString() : String(error);
+        jobStatus = JobStatus.FAILED;
         message = reason;
         // Nieudana inspekcja tez liczy sie jako sprawdzenie - inaczej ten sam
         // adres blokowalby kolejke przy kazdym przebiegu.
-        await db_1.db
+        await db
             .updateTable("urls")
             .set({
             last_checked_at: new Date(),
             error_message: reason.slice(0, 500),
-            ...(page.index_status === types_1.IndexStatus.UNKNOWN
-                ? { index_status: types_1.IndexStatus.ERROR }
+            ...(page.index_status === IndexStatus.UNKNOWN
+                ? { index_status: IndexStatus.ERROR }
                 : {}),
         })
             .where("id", "=", page.id)
             .execute();
-        if (page.index_status === types_1.IndexStatus.UNKNOWN)
-            indexStatus = types_1.IndexStatus.ERROR;
+        if (page.index_status === IndexStatus.UNKNOWN)
+            indexStatus = IndexStatus.ERROR;
     }
     const durationMs = Number(process.hrtime.bigint() - started) / 1_000_000;
-    await db_1.db
+    await db
         .updateTable("index_jobs")
         .set({
         status: jobStatus,
@@ -197,8 +154,8 @@ async function inspectSingle(userId, site, page, triggeredBy = "manual") {
         .execute();
     return { status: jobStatus, indexStatus, message };
 }
-async function inspectBatch(userId, site, limit = config_1.config.inspectionBatchSize, triggeredBy = "manual") {
-    const pages = await (0, urls_1.pickUrlsForInspection)(site.id, limit, config_1.config.recheckAfterDays);
+export async function inspectBatch(userId, site, limit = config.inspectionBatchSize, triggeredBy = "manual") {
+    const pages = await pickUrlsForInspection(site.id, limit, config.recheckAfterDays);
     const summary = {
         checked: 0,
         indexed: 0,
@@ -209,37 +166,37 @@ async function inspectBatch(userId, site, limit = config_1.config.inspectionBatc
     for (const page of pages) {
         const outcome = await inspectSingle(userId, site, page, triggeredBy);
         summary.checked += 1;
-        if (outcome.status === types_1.JobStatus.FAILED) {
+        if (outcome.status === JobStatus.FAILED) {
             summary.errors += 1;
             // Po wyczerpaniu limitu dalsze proby tylko generuja bledy.
             if (outcome.message.toLowerCase().includes("quota"))
                 break;
         }
-        else if (outcome.indexStatus === types_1.IndexStatus.INDEXED) {
+        else if (outcome.indexStatus === IndexStatus.INDEXED) {
             summary.indexed += 1;
         }
-        else if (outcome.indexStatus === types_1.IndexStatus.EXCLUDED) {
+        else if (outcome.indexStatus === IndexStatus.EXCLUDED) {
             summary.excluded += 1;
         }
         else {
             summary.not_indexed += 1;
         }
-        await sleep(config_1.config.apiThrottleSeconds);
+        await sleep(config.apiThrottleSeconds);
     }
-    await (0, stats_1.recordSiteSnapshot)(site, 0, summary.checked);
+    await recordSiteSnapshot(site, 0, summary.checked);
     return summary;
 }
-async function submitSingle(ctx, site, page, target, jobType = types_1.JobType.URL_UPDATED, triggeredBy = "manual") {
+export async function submitSingle(ctx, site, page, target, jobType = JobType.URL_UPDATED, triggeredBy = "manual") {
     const { workspace } = ctx;
-    const inserted = await db_1.db
+    const inserted = await db
         .insertInto("index_jobs")
         .values({
         site_id: site.id,
         url_id: page?.id ?? null,
         target: target.slice(0, 2048),
         job_type: jobType,
-        engine: types_1.Engine.GOOGLE,
-        status: types_1.JobStatus.RUNNING,
+        engine: Engine.GOOGLE,
+        status: JobStatus.RUNNING,
         triggered_by: triggeredBy,
     })
         .executeTakeFirst();
@@ -250,20 +207,20 @@ async function submitSingle(ctx, site, page, target, jobType = types_1.JobType.U
     let payload = null;
     let credentialLabel = ctx.resolved?.label ?? "";
     if ((await quota.remaining(workspace)) <= 0) {
-        status = types_1.JobStatus.SKIPPED;
+        status = JobStatus.SKIPPED;
         message = "Wyczerpany dzienny limit zgloszen do Google Indexing API.";
     }
     else {
         try {
             const credential = ctx.resolved ?? (await resolveIndexingToken(ctx.userId, ctx.userEmail, workspace));
             credentialLabel = credential.label;
-            const response = await indexing.publishUrl(credential.token, target, jobType === types_1.JobType.URL_DELETED ? "URL_DELETED" : "URL_UPDATED");
-            await quota.consume(workspace.id, 1, types_1.Engine.GOOGLE);
-            status = types_1.JobStatus.SUCCESS;
+            const response = await indexing.publishUrl(credential.token, target, jobType === JobType.URL_DELETED ? "URL_DELETED" : "URL_UPDATED");
+            await quota.consume(workspace.id, 1, Engine.GOOGLE);
+            status = JobStatus.SUCCESS;
             message = "Zgloszono do Google Indexing API";
             payload = { response, credential: credential.label };
             if (page) {
-                await db_1.db
+                await db
                     .updateTable("urls")
                     .set({
                     last_submitted_at: new Date(),
@@ -274,16 +231,16 @@ async function submitSingle(ctx, site, page, target, jobType = types_1.JobType.U
             }
         }
         catch (error) {
-            status = types_1.JobStatus.FAILED;
-            message = error instanceof errors_1.GoogleApiError ? error.toString() : String(error);
+            status = JobStatus.FAILED;
+            message = error instanceof GoogleApiError ? error.toString() : String(error);
             payload = {
                 credential: credentialLabel,
-                error: error instanceof errors_1.GoogleApiError ? error.payload : String(error),
+                error: error instanceof GoogleApiError ? error.payload : String(error),
             };
         }
     }
     const durationMs = Number(process.hrtime.bigint() - started) / 1_000_000;
-    await db_1.db
+    await db
         .updateTable("index_jobs")
         .set({
         status,
@@ -296,7 +253,7 @@ async function submitSingle(ctx, site, page, target, jobType = types_1.JobType.U
         .execute();
     return { status, message };
 }
-async function submitBatch(userId, userEmail, workspace, site, pages, jobType = types_1.JobType.URL_UPDATED, triggeredBy = "manual") {
+export async function submitBatch(userId, userEmail, workspace, site, pages, jobType = JobType.URL_UPDATED, triggeredBy = "manual") {
     const summary = { submitted: 0, failed: 0, skipped: 0, messages: [] };
     if (pages.length === 0)
         return summary;
@@ -308,16 +265,16 @@ async function submitBatch(userId, userEmail, workspace, site, pages, jobType = 
     }
     catch (error) {
         summary.failed = pages.length;
-        summary.messages.push(error instanceof errors_1.GoogleApiError ? error.toString() : String(error));
+        summary.messages.push(error instanceof GoogleApiError ? error.toString() : String(error));
         return summary;
     }
     const ctx = { userId, userEmail, workspace, resolved };
     for (const page of pages) {
         const outcome = await submitSingle(ctx, site, page, page.url, jobType, triggeredBy);
-        if (outcome.status === types_1.JobStatus.SUCCESS) {
+        if (outcome.status === JobStatus.SUCCESS) {
             summary.submitted += 1;
         }
-        else if (outcome.status === types_1.JobStatus.SKIPPED) {
+        else if (outcome.status === JobStatus.SKIPPED) {
             summary.skipped += 1;
             summary.messages.push(outcome.message);
             break;
@@ -330,17 +287,17 @@ async function submitBatch(userId, userEmail, workspace, site, pages, jobType = 
             if (lower.includes("quota") || outcome.message.includes("429"))
                 break;
         }
-        await sleep(config_1.config.apiThrottleSeconds);
+        await sleep(config.apiThrottleSeconds);
     }
-    await db_1.db
+    await db
         .updateTable("sites")
         .set({ last_index_run_at: new Date() })
         .where("id", "=", site.id)
         .execute();
-    await (0, stats_1.recordSiteSnapshot)(site, summary.submitted, 0);
+    await recordSiteSnapshot(site, summary.submitted, 0);
     return summary;
 }
-async function submitIndexNow(site, urls) {
+export async function submitIndexNow(site, urls) {
     if (!site.indexnow_key) {
         return { ok: false, status: 0, message: "Brak klucza IndexNow dla tej strony.", count: 0 };
     }
@@ -348,14 +305,14 @@ async function submitIndexNow(site, urls) {
         return { ok: false, status: 0, message: "Brak URL-i do zgloszenia.", count: 0 };
     }
     const keyLocation = indexnow.keyFileUrl(site.home_url, site.indexnow_key);
-    const inserted = await db_1.db
+    const inserted = await db
         .insertInto("index_jobs")
         .values({
         site_id: site.id,
         target: `${urls.length} URL-i`,
-        job_type: types_1.JobType.INDEXNOW,
-        engine: types_1.Engine.BING,
-        status: types_1.JobStatus.RUNNING,
+        job_type: JobType.INDEXNOW,
+        engine: Engine.BING,
+        status: JobStatus.RUNNING,
     })
         .executeTakeFirst();
     const jobId = Number(inserted.insertId);
@@ -367,14 +324,14 @@ async function submitIndexNow(site, urls) {
         result = {
             ok: false,
             status: 0,
-            message: error instanceof errors_1.GoogleApiError ? error.toString() : String(error),
+            message: error instanceof GoogleApiError ? error.toString() : String(error),
             count: urls.length,
         };
     }
-    await db_1.db
+    await db
         .updateTable("index_jobs")
         .set({
-        status: result.ok ? types_1.JobStatus.SUCCESS : types_1.JobStatus.FAILED,
+        status: result.ok ? JobStatus.SUCCESS : JobStatus.FAILED,
         message: `${result.message} (${result.count} URL-i)`,
         payload: JSON.stringify(result),
         finished_at: new Date(),
@@ -384,11 +341,11 @@ async function submitIndexNow(site, urls) {
     return result;
 }
 /** Pelny cykl dla jednej strony: odswiez URL-e, sprawdz, zglos brakujace. */
-async function runSitePipeline(userId, userEmail, workspace, site, triggeredBy = "auto", scanSitemaps = true) {
+export async function runSitePipeline(userId, userEmail, workspace, site, triggeredBy = "auto", scanSitemaps = true) {
     const report = { site: site.display_name };
     if (scanSitemaps) {
         try {
-            report.scan = await (0, sitemaps_1.scanAllSitemaps)(site);
+            report.scan = await scanAllSitemaps(site);
         }
         catch (error) {
             // Blad skanu nie moze zatrzymac indeksowania tego, co juz jest w bazie.
@@ -397,7 +354,7 @@ async function runSitePipeline(userId, userEmail, workspace, site, triggeredBy =
         }
     }
     try {
-        report.inspection = await inspectBatch(userId, site, config_1.config.inspectionBatchSize, triggeredBy);
+        report.inspection = await inspectBatch(userId, site, config.inspectionBatchSize, triggeredBy);
     }
     catch (error) {
         report.inspection = { error: error instanceof Error ? error.message : String(error) };
@@ -407,13 +364,13 @@ async function runSitePipeline(userId, userEmail, workspace, site, triggeredBy =
         report.submission = { skipped: true, reason: "Brak dostepnego limitu na dzis." };
         return report;
     }
-    const pages = await (0, urls_1.pickUrlsForSubmission)(site.id, budget);
-    const submission = await submitBatch(userId, userEmail, workspace, site, pages, types_1.JobType.URL_UPDATED, triggeredBy);
+    const pages = await pickUrlsForSubmission(site.id, budget);
+    const submission = await submitBatch(userId, userEmail, workspace, site, pages, JobType.URL_UPDATED, triggeredBy);
     report.submission = submission;
     if (site.indexnow_enabled && pages.length > 0) {
         report.indexnow = await submitIndexNow(site, pages.map((p) => p.url));
     }
-    await (0, activity_1.logEvent)(`Auto-indeksowanie ${site.display_name}: zgloszono ${submission.submitted} URL-i.`, { workspaceId: workspace.id, category: "indexing", details: report });
+    await logEvent(`Auto-indeksowanie ${site.display_name}: zgloszono ${submission.submitted} URL-i.`, { workspaceId: workspace.id, category: "indexing", details: report });
     return report;
 }
 //# sourceMappingURL=indexer.js.map

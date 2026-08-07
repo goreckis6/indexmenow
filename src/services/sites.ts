@@ -1,9 +1,9 @@
-import { db } from "../db";
-import type { Site, Workspace } from "../db/types";
-import * as gsc from "../google/searchConsole";
-import { getAccessToken } from "../google/oauth";
-import { generateIndexNowKey } from "../lib/crypto";
-import { logEvent } from "./activity";
+import { db } from "../db/index.js";
+import type { Site, Workspace } from "../db/types.js";
+import * as gsc from "../google/searchConsole.js";
+import { getAccessToken } from "../google/oauth.js";
+import { generateIndexNowKey } from "../lib/crypto.js";
+import { logEvent } from "./activity.js";
 
 export function propertyToHomeUrl(propertyUrl: string): string {
   if (propertyUrl.startsWith("sc-domain:")) {

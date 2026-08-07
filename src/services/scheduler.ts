@@ -1,12 +1,12 @@
 import crypto from "node:crypto";
 import { Cron } from "croner";
 import { sql } from "kysely";
-import { config } from "../config";
-import { db } from "../db";
-import { logEvent } from "./activity";
-import { runSitePipeline } from "./indexer";
-import { scanAllSitemaps } from "./sitemaps";
-import { recordSiteSnapshot } from "./stats";
+import { config } from "../config.js";
+import { db } from "../db/index.js";
+import { logEvent } from "./activity.js";
+import { runSitePipeline } from "./indexer.js";
+import { scanAllSitemaps } from "./sitemaps.js";
+import { recordSiteSnapshot } from "./stats.js";
 
 const LOCK_NAME = "scheduler";
 /** Po tym czasie bez odswiezenia blokada uznawana jest za porzucona. */

@@ -1,13 +1,5 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.fetchBytes = fetchBytes;
-exports.parseSitemapXml = parseSitemapXml;
-exports.crawlSitemap = crawlSitemap;
-exports.readRobotsSitemaps = readRobotsSitemaps;
-exports.guessSitemapUrls = guessSitemapUrls;
-exports.urlBelongsToSite = urlBelongsToSite;
-const node_zlib_1 = require("node:zlib");
-const fast_xml_parser_1 = require("fast-xml-parser");
+import { gunzipSync } from "node:zlib";
+import { XMLParser } from "fast-xml-parser";
 const USER_AGENT = "IndexMeNow/1.0 (+sitemap-crawler)";
 const TIMEOUT_MS = 30_000;
 const MAX_DEPTH = 3;
@@ -25,7 +17,7 @@ function parseLastmod(value) {
     const dateOnly = new Date(value.trim().slice(0, 10));
     return Number.isNaN(dateOnly.getTime()) ? null : dateOnly;
 }
-async function fetchBytes(url) {
+export async function fetchBytes(url) {
     const response = await fetch(url, {
         headers: { "User-Agent": USER_AGENT },
         redirect: "follow",
@@ -38,7 +30,7 @@ async function fetchBytes(url) {
     // Rozpoznajemy gzip po naglowku pliku, a nie tylko po rozszerzeniu - czesc
     // serwerow oddaje spakowana sitemape pod adresem bez ".gz".
     if (url.endsWith(".gz") || (content[0] === 0x1f && content[1] === 0x8b)) {
-        content = (0, node_zlib_1.gunzipSync)(content);
+        content = gunzipSync(content);
     }
     return content;
 }
@@ -60,10 +52,10 @@ function textOf(value) {
     }
     return "";
 }
-function parseSitemapXml(content, source) {
+export function parseSitemapXml(content, source) {
     const result = emptyResult(source);
     const text = content.toString("utf8");
-    const parser = new fast_xml_parser_1.XMLParser({
+    const parser = new XMLParser({
         ignoreAttributes: true,
         // Sitemapy uzywaja przestrzeni nazw (sitemap:url, image:image itd.).
         // Bez usuniecia prefiksow trafialyby pod klucze, ktorych nie sprawdzamy.
@@ -126,7 +118,7 @@ function parseSitemapXml(content, source) {
     return result;
 }
 /** Pobiera sitemape i rozwija rekurencyjnie pliki indeksu. */
-async function crawlSitemap(url, depth = 0, seen = new Set()) {
+export async function crawlSitemap(url, depth = 0, seen = new Set()) {
     const aggregate = emptyResult(url);
     if (seen.has(url) || depth > MAX_DEPTH)
         return aggregate;
@@ -158,7 +150,7 @@ async function crawlSitemap(url, depth = 0, seen = new Set()) {
     aggregate.entries = [...unique.values()].slice(0, MAX_URLS);
     return aggregate;
 }
-async function readRobotsSitemaps(homeUrl) {
+export async function readRobotsSitemaps(homeUrl) {
     let robotsUrl;
     try {
         robotsUrl = new URL("/robots.txt", homeUrl).toString();
@@ -186,7 +178,7 @@ async function readRobotsSitemaps(homeUrl) {
     }
 }
 /** Typowe lokalizacje sitemap plus to, co ogłasza robots.txt. */
-async function guessSitemapUrls(homeUrl) {
+export async function guessSitemapUrls(homeUrl) {
     const base = homeUrl.endsWith("/") ? homeUrl : `${homeUrl}/`;
     const candidates = [
         "sitemap.xml",
@@ -198,7 +190,7 @@ async function guessSitemapUrls(homeUrl) {
     candidates.push(...(await readRobotsSitemaps(base)));
     return [...new Set(candidates)];
 }
-function urlBelongsToSite(url, homeUrl, isDomainProperty) {
+export function urlBelongsToSite(url, homeUrl, isDomainProperty) {
     let target;
     let base;
     try {

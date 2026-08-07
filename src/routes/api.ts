@@ -1,18 +1,18 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import { db } from "../db";
-import { IndexStatus } from "../db/types";
+import { db } from "../db/index.js";
+import { IndexStatus } from "../db/types.js";
 import {
   asyncHandler,
   loadUser,
   requireApiAuth,
   requireSite,
   resolveWorkspace,
-} from "../middleware/auth";
-import * as quota from "../services/quota";
-import { nextRunTimes, runningTasks } from "../services/scheduler";
-import { siteUrlStats, workspaceUrlStats } from "../services/urls";
-import { workspaceIndexingHistory } from "../services/stats";
+} from "../middleware/auth.js";
+import * as quota from "../services/quota.js";
+import { nextRunTimes, runningTasks } from "../services/scheduler.js";
+import { siteUrlStats, workspaceUrlStats } from "../services/urls.js";
+import { workspaceIndexingHistory } from "../services/stats.js";
 
 export const apiRouter = Router();
 apiRouter.use(loadUser, requireApiAuth, resolveWorkspace);

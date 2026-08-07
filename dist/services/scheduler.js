@@ -1,40 +1,25 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.isRunning = isRunning;
-exports.runningTasks = runningTasks;
-exports.runInBackground = runInBackground;
-exports.jobAutoIndex = jobAutoIndex;
-exports.jobScanSitemaps = jobScanSitemaps;
-exports.jobDailySnapshot = jobDailySnapshot;
-exports.startScheduler = startScheduler;
-exports.shutdownScheduler = shutdownScheduler;
-exports.nextRunTimes = nextRunTimes;
-exports.schedulerStatus = schedulerStatus;
-const node_crypto_1 = __importDefault(require("node:crypto"));
-const croner_1 = require("croner");
-const kysely_1 = require("kysely");
-const config_1 = require("../config");
-const db_1 = require("../db");
-const activity_1 = require("./activity");
-const indexer_1 = require("./indexer");
-const sitemaps_1 = require("./sitemaps");
-const stats_1 = require("./stats");
+import crypto from "node:crypto";
+import { Cron } from "croner";
+import { sql } from "kysely";
+import { config } from "../config.js";
+import { db } from "../db/index.js";
+import { logEvent } from "./activity.js";
+import { runSitePipeline } from "./indexer.js";
+import { scanAllSitemaps } from "./sitemaps.js";
+import { recordSiteSnapshot } from "./stats.js";
 const LOCK_NAME = "scheduler";
 /** Po tym czasie bez odswiezenia blokada uznawana jest za porzucona. */
 const LOCK_TTL_SECONDS = 300;
 const HEARTBEAT_SECONDS = 60;
-const INSTANCE_ID = `${process.pid}-${node_crypto_1.default.randomBytes(4).toString("hex")}`;
+const INSTANCE_ID = `${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
 const runningTaskKeys = new Set();
 let jobs = [];
 let heartbeat = null;
 let ownsLock = false;
-function isRunning(taskKey) {
+export function isRunning(taskKey) {
     return runningTaskKeys.has(taskKey);
 }
-function runningTasks() {
+export function runningTasks() {
     return [...runningTaskKeys].sort();
 }
 /**
@@ -42,7 +27,7 @@ function runningTasks() {
  * zadanie juz trwa - dzieki temu podwojne klikniecie w panelu nie zgłosi
  * tych samych URL-i dwa razy.
  */
-function runInBackground(taskKey, fn) {
+export function runInBackground(taskKey, fn) {
     if (runningTaskKeys.has(taskKey))
         return false;
     runningTaskKeys.add(taskKey);
@@ -66,7 +51,7 @@ function runInBackground(taskKey, fn) {
  * je po wygasnieciu wpisu.
  */
 async function holdsLock() {
-    const row = await db_1.db
+    const row = await db
         .selectFrom("scheduler_lock")
         .select("owner")
         .where("name", "=", LOCK_NAME)
@@ -78,14 +63,14 @@ async function acquireLock() {
     // Wiersz musi istniec, zeby ponizszy UPDATE mial co zmieniac. IGNORE zamiast
     // zwyklego INSERT, bo przy wyscigu dwoch instancji jedna dostalaby blad
     // duplikatu klucza.
-    await (0, kysely_1.sql) `
+    await sql `
     INSERT IGNORE INTO scheduler_lock (name, owner, acquired_at, heartbeat_at)
     VALUES (${LOCK_NAME}, ${INSTANCE_ID}, ${now}, ${now})
-  `.execute(db_1.db);
+  `.execute(db);
     // Blokade przejmujemy tylko wtedy, gdy juz jest nasza albo poprzedni
     // wlasciciel przestal odswiezac wpis.
     const cutoff = new Date(Date.now() - LOCK_TTL_SECONDS * 1000);
-    await db_1.db
+    await db
         .updateTable("scheduler_lock")
         .set({ owner: INSTANCE_ID, acquired_at: now, heartbeat_at: now })
         .where("name", "=", LOCK_NAME)
@@ -97,7 +82,7 @@ async function acquireLock() {
 }
 async function refreshLock() {
     if (ownsLock) {
-        await db_1.db
+        await db
             .updateTable("scheduler_lock")
             .set({ heartbeat_at: new Date() })
             .where("name", "=", LOCK_NAME)
@@ -133,14 +118,14 @@ async function guarded(name, fn) {
     }
 }
 /** Codzienny przebieg po wszystkich stronach z wlaczonym auto-indeksowaniem. */
-async function jobAutoIndex() {
-    const workspaces = await db_1.db
+export async function jobAutoIndex() {
+    const workspaces = await db
         .selectFrom("workspaces")
         .selectAll()
         .where("auto_index_enabled", "=", true)
         .execute();
     for (const workspace of workspaces) {
-        const user = await db_1.db
+        const user = await db
             .selectFrom("users")
             .innerJoin("google_credentials", "google_credentials.user_id", "users.id")
             .select(["users.id as id", "users.email as email", "users.is_active as is_active"])
@@ -149,7 +134,7 @@ async function jobAutoIndex() {
         // Bez zapisanych tokenow Google nie ma czym sie uwierzytelnic.
         if (!user || !user.is_active)
             continue;
-        const sites = await db_1.db
+        const sites = await db
             .selectFrom("sites")
             .selectAll()
             .where("workspace_id", "=", workspace.id)
@@ -158,12 +143,12 @@ async function jobAutoIndex() {
             .execute();
         for (const site of sites) {
             try {
-                await (0, indexer_1.runSitePipeline)(user.id, user.email, workspace, site, "auto");
+                await runSitePipeline(user.id, user.email, workspace, site, "auto");
             }
             catch (error) {
                 const reason = error instanceof Error ? error.message : String(error);
                 console.error(`Auto-indeksowanie nie powiodlo sie dla ${site.display_name}`, error);
-                await (0, activity_1.logEvent)(`Auto-indeksowanie ${site.display_name} nie powiodlo sie: ${reason}`, {
+                await logEvent(`Auto-indeksowanie ${site.display_name} nie powiodlo sie: ${reason}`, {
                     workspaceId: workspace.id,
                     level: "error",
                     category: "indexing",
@@ -172,27 +157,27 @@ async function jobAutoIndex() {
         }
     }
 }
-async function jobScanSitemaps() {
-    const sites = await db_1.db.selectFrom("sites").selectAll().where("is_active", "=", true).execute();
+export async function jobScanSitemaps() {
+    const sites = await db.selectFrom("sites").selectAll().where("is_active", "=", true).execute();
     for (const site of sites) {
         try {
-            await (0, sitemaps_1.scanAllSitemaps)(site);
+            await scanAllSitemaps(site);
         }
         catch (error) {
             console.error(`Skan sitemap nie powiodl sie dla ${site.display_name}`, error);
         }
     }
 }
-async function jobDailySnapshot() {
-    const sites = await db_1.db.selectFrom("sites").select("id").execute();
+export async function jobDailySnapshot() {
+    const sites = await db.selectFrom("sites").select("id").execute();
     for (const site of sites) {
-        await (0, stats_1.recordSiteSnapshot)(site);
+        await recordSiteSnapshot(site);
     }
 }
-async function startScheduler() {
+export async function startScheduler() {
     if (jobs.length > 0)
         return;
-    if (!config_1.config.schedulerEnabled) {
+    if (!config.schedulerEnabled) {
         console.log("Scheduler wylaczony przez SCHEDULER_ENABLED=false.");
         return;
     }
@@ -200,16 +185,16 @@ async function startScheduler() {
     heartbeat = setInterval(() => {
         void refreshLock();
     }, HEARTBEAT_SECONDS * 1000);
-    const options = { timezone: config_1.config.timezone, protect: true };
+    const options = { timezone: config.timezone, protect: true };
     jobs = [
-        new croner_1.Cron(`0 ${config_1.config.autoIndexHour} * * *`, options, () => guarded("auto-index-all", jobAutoIndex)),
-        new croner_1.Cron(`0 */${Math.max(1, config_1.config.sitemapScanIntervalHours)} * * *`, options, () => guarded("scan-sitemaps-all", jobScanSitemaps)),
-        new croner_1.Cron("50 23 * * *", options, () => guarded("daily-snapshot", jobDailySnapshot)),
+        new Cron(`0 ${config.autoIndexHour} * * *`, options, () => guarded("auto-index-all", jobAutoIndex)),
+        new Cron(`0 */${Math.max(1, config.sitemapScanIntervalHours)} * * *`, options, () => guarded("scan-sitemaps-all", jobScanSitemaps)),
+        new Cron("50 23 * * *", options, () => guarded("daily-snapshot", jobDailySnapshot)),
     ];
-    console.log(`Scheduler wystartowal (auto-index o ${String(config_1.config.autoIndexHour).padStart(2, "0")}:00, ` +
-        `skan sitemap co ${config_1.config.sitemapScanIntervalHours}h, blokada: ${ownsLock ? "przejeta" : "u innej instancji"})`);
+    console.log(`Scheduler wystartowal (auto-index o ${String(config.autoIndexHour).padStart(2, "0")}:00, ` +
+        `skan sitemap co ${config.sitemapScanIntervalHours}h, blokada: ${ownsLock ? "przejeta" : "u innej instancji"})`);
 }
-async function shutdownScheduler() {
+export async function shutdownScheduler() {
     for (const job of jobs)
         job.stop();
     jobs = [];
@@ -220,7 +205,7 @@ async function shutdownScheduler() {
     if (ownsLock) {
         // Zwolnienie blokady przy zamknieciu pozwala innej instancji przejac
         // zadania od razu, bez czekania na wygasniecie wpisu.
-        await db_1.db
+        await db
             .deleteFrom("scheduler_lock")
             .where("name", "=", LOCK_NAME)
             .where("owner", "=", INSTANCE_ID)
@@ -229,16 +214,16 @@ async function shutdownScheduler() {
         ownsLock = false;
     }
 }
-function nextRunTimes() {
+export function nextRunTimes() {
     const names = ["auto-index", "scan-sitemaps", "daily-snapshot"];
     return jobs.map((job, i) => ({
         id: names[i] ?? `job-${i}`,
         next_run: job.nextRun()?.toISOString() ?? null,
     }));
 }
-function schedulerStatus() {
+export function schedulerStatus() {
     return {
-        enabled: config_1.config.schedulerEnabled,
+        enabled: config.schedulerEnabled,
         ownsLock,
         instance: INSTANCE_ID,
         running: runningTasks(),

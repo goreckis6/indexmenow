@@ -1,6 +1,6 @@
-import { config } from "../config";
-import { db } from "../db";
-import type { User, Workspace } from "../db/types";
+import { config } from "../config.js";
+import { db } from "../db/index.js";
+import type { User, Workspace } from "../db/types.js";
 
 export function slugify(value: string): string {
   const slug = value

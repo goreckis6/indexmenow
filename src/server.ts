@@ -1,23 +1,24 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import session from "express-session";
 import MySQLStoreFactory from "express-mysql-session";
 import multer from "multer";
-import { config, ROOT_DIR } from "./config";
-import { closeDatabase, pingDatabase, pool } from "./db";
-import { migrate } from "./db/migrate";
-import { HttpError, loadUser } from "./middleware/auth";
-import { apiRouter } from "./routes/api";
-import { authRouter } from "./routes/auth";
-import { dashboardRouter } from "./routes/dashboard";
-import { historyRouter } from "./routes/history";
-import { settingsRouter } from "./routes/settings";
-import { sitesRouter } from "./routes/sites";
-import { toolsRouter } from "./routes/tools";
-import { urlsRouter } from "./routes/urls";
-import { shutdownScheduler, startScheduler } from "./services/scheduler";
-import { baseContext, configureTemplates } from "./templating";
-import "./types";
+import { config, ROOT_DIR } from "./config.js";
+import { closeDatabase, pingDatabase, pool } from "./db/index.js";
+import { migrate } from "./db/migrate.js";
+import { HttpError, loadUser } from "./middleware/auth.js";
+import { apiRouter } from "./routes/api.js";
+import { authRouter } from "./routes/auth.js";
+import { dashboardRouter } from "./routes/dashboard.js";
+import { historyRouter } from "./routes/history.js";
+import { settingsRouter } from "./routes/settings.js";
+import { sitesRouter } from "./routes/sites.js";
+import { toolsRouter } from "./routes/tools.js";
+import { urlsRouter } from "./routes/urls.js";
+import { shutdownScheduler, startScheduler } from "./services/scheduler.js";
+import { baseContext, configureTemplates } from "./templating.js";
+import "./types.js";
 
 const MySQLStore = MySQLStoreFactory(session as unknown as typeof import("express-session"));
 
@@ -303,11 +304,10 @@ async function listenDirectly(): Promise<void> {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
-// Uruchomienie bezposrednie: `node dist/server.js` / `tsx src/server.ts`
-const isDirectRun =
-  typeof require !== "undefined" &&
-  typeof module !== "undefined" &&
-  require.main === module;
+// Uruchomienie bezposrednie: `node dist/server.js`
+const isDirectRun = process.argv[1]
+  ? path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  : false;
 
 if (isDirectRun) {
   listenDirectly().catch((error) => {

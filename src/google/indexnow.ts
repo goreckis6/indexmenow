@@ -1,4 +1,4 @@
-import { GoogleApiError } from "./errors";
+import { GoogleApiError } from "./errors.js";
 
 /** IndexNow jest wspolny dla Bing, Yandex, Seznam i Naver. */
 const ENDPOINTS: Record<string, string> = {

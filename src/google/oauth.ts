@@ -1,8 +1,8 @@
-import { config } from "../config";
-import { db } from "../db";
-import type { GoogleCredential } from "../db/types";
-import { decrypt, encrypt } from "../lib/crypto";
-import { GoogleApiError, parseError, safeJson } from "./errors";
+import { config } from "../config.js";
+import { db } from "../db/index.js";
+import type { GoogleCredential } from "../db/types.js";
+import { decrypt, encrypt } from "../lib/crypto.js";
+import { GoogleApiError, parseError, safeJson } from "./errors.js";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";

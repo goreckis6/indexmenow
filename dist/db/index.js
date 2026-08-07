@@ -1,20 +1,12 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.db = exports.pool = void 0;
-exports.pingDatabase = pingDatabase;
-exports.closeDatabase = closeDatabase;
-const kysely_1 = require("kysely");
-const mysql2_1 = __importDefault(require("mysql2"));
-const config_1 = require("../config");
-exports.pool = mysql2_1.default.createPool({
-    host: config_1.config.db.host,
-    port: config_1.config.db.port,
-    user: config_1.config.db.user,
-    password: config_1.config.db.password,
-    database: config_1.config.db.database,
+import { Kysely, MysqlDialect } from "kysely";
+import mysql from "mysql2";
+import { config } from "../config.js";
+export const pool = mysql.createPool({
+    host: config.db.host,
+    port: config.db.port,
+    user: config.db.user,
+    password: config.db.password,
+    database: config.db.database,
     connectionLimit: 10,
     waitForConnections: true,
     // Bez limitu Hostinger zabija proces (503), zanim zdazymy zalogowac blad.
@@ -29,12 +21,12 @@ exports.pool = mysql2_1.default.createPool({
         return next();
     },
 });
-exports.db = new kysely_1.Kysely({
-    dialect: new kysely_1.MysqlDialect({ pool: exports.pool }),
+export const db = new Kysely({
+    dialect: new MysqlDialect({ pool }),
 });
 /** Szybki test polaczenia - rzuca z czytelnym komunikatem zamiast wisiec. */
-async function pingDatabase() {
-    const connection = await exports.pool.promise().getConnection();
+export async function pingDatabase() {
+    const connection = await pool.promise().getConnection();
     try {
         await connection.query("SELECT 1");
     }
@@ -42,7 +34,7 @@ async function pingDatabase() {
         connection.release();
     }
 }
-async function closeDatabase() {
-    await exports.db.destroy();
+export async function closeDatabase() {
+    await db.destroy();
 }
 //# sourceMappingURL=index.js.map

@@ -1,4 +1,4 @@
-import { googleRequest } from "./http";
+import { googleRequest } from "./http.js";
 
 const PUBLISH_ENDPOINT = "https://indexing.googleapis.com/v3/urlNotifications:publish";
 const METADATA_ENDPOINT = "https://indexing.googleapis.com/v3/urlNotifications/metadata";

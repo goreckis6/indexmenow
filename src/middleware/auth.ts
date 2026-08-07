@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
-import { db } from "../db";
-import type { FlashMessage } from "../types";
-import { createDefaultWorkspace } from "../services/workspaces";
+import { db } from "../db/index.js";
+import type { FlashMessage } from "../types.js";
+import { createDefaultWorkspace } from "../services/workspaces.js";
 
 export function flash(req: Request, message: string, category: FlashMessage["category"] = "success"): void {
   const messages = req.session._flashes ?? [];

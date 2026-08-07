@@ -1,18 +1,7 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.fmtDatetime = fmtDatetime;
-exports.fmtRelative = fmtRelative;
-exports.fmtNumber = fmtNumber;
-exports.truncateUrl = truncateUrl;
-exports.configureTemplates = configureTemplates;
-exports.baseContext = baseContext;
-const node_path_1 = __importDefault(require("node:path"));
-const nunjucks_1 = __importDefault(require("nunjucks"));
-const config_1 = require("./config");
-const auth_1 = require("./middleware/auth");
+import path from "node:path";
+import nunjucks from "nunjucks";
+import { ROOT_DIR, config } from "./config.js";
+import { popFlashes } from "./middleware/auth.js";
 const STATUS_LABELS = {
     INDEXED: "Zaindeksowany",
     NOT_INDEXED: "Niezaindeksowany",
@@ -48,7 +37,7 @@ const JOB_TYPE_LABELS = {
 function pad(value) {
     return String(value).padStart(2, "0");
 }
-function fmtDatetime(value) {
+export function fmtDatetime(value) {
     if (!value)
         return "—";
     const date = value instanceof Date ? value : new Date(value);
@@ -56,7 +45,7 @@ function fmtDatetime(value) {
         return "—";
     return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
-function fmtRelative(value) {
+export function fmtRelative(value) {
     if (!value)
         return "nigdy";
     const date = value instanceof Date ? value : new Date(value);
@@ -79,24 +68,24 @@ function fmtRelative(value) {
     const months = Math.floor(days / 30);
     return months < 12 ? `${months} mies. temu` : `${Math.floor(days / 365)} lat temu`;
 }
-function fmtNumber(value) {
+export function fmtNumber(value) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed))
         return String(value ?? "—");
     // Spacja jako separator tysiecy, jak w polskiej konwencji.
     return Math.trunc(parsed).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
-function truncateUrl(value, length = 60) {
+export function truncateUrl(value, length = 60) {
     if (!value)
         return "—";
     const cleaned = value.replace(/^https?:\/\//, "");
     return cleaned.length <= length ? cleaned : `${cleaned.slice(0, length - 1)}…`;
 }
-function configureTemplates(app) {
-    const env = nunjucks_1.default.configure(node_path_1.default.join(config_1.ROOT_DIR, "views"), {
+export function configureTemplates(app) {
+    const env = nunjucks.configure(path.join(ROOT_DIR, "views"), {
         autoescape: true,
         express: app,
-        noCache: config_1.config.debug,
+        noCache: config.debug,
     });
     env.addFilter("dt", fmtDatetime);
     env.addFilter("ago", fmtRelative);
@@ -117,7 +106,7 @@ function configureTemplates(app) {
     // ktore zamknelyby atrybut HTML, w ktorym te dane siedza.
     env.addFilter("tojson", (value) => {
         const json = JSON.stringify(value ?? null);
-        return new nunjucks_1.default.runtime.SafeString(json.replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/'/g, "\\u0027"));
+        return new nunjucks.runtime.SafeString(json.replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/'/g, "\\u0027"));
     });
     // Jinja2 ma |min/|max na listach oraz '%02d'|format(...) - w Nunjucks nie ma
     // zadnego z nich, a szablony z nich korzystaja.
@@ -137,32 +126,32 @@ function configureTemplates(app) {
         return Number.isFinite(n) ? n : 0;
     });
     env.addFilter("upper", (value) => String(value ?? "").toUpperCase());
-    env.addGlobal("app_name", config_1.config.appName);
+    env.addGlobal("app_name", config.appName);
     env.addGlobal("now", () => new Date());
     return env;
 }
 /** Adres bazy do wyswietlenia w panelu - bez hasla. */
 function maskedDatabaseUrl() {
-    const { user, host, port, database } = config_1.config.db;
+    const { user, host, port, database } = config.db;
     return `mysql://${user}@${host}:${port}/${database}`;
 }
 /** Wspolny kontekst dla kazdej strony - odpowiednik render() z wersji Pythona. */
-function baseContext(req, context = {}) {
+export function baseContext(req, context = {}) {
     return {
-        flashes: (0, auth_1.popFlashes)(req),
+        flashes: popFlashes(req),
         app_settings: {
-            app_name: config_1.config.appName,
-            base_url: config_1.config.baseUrl,
-            host: config_1.config.host,
-            port: config_1.config.port,
+            app_name: config.appName,
+            base_url: config.baseUrl,
+            host: config.host,
+            port: config.port,
             database_url: maskedDatabaseUrl(),
-            google_configured: config_1.config.googleConfigured,
-            timezone: config_1.config.timezone,
-            default_daily_quota: config_1.config.defaultDailyQuota,
-            auto_index_hour: config_1.config.autoIndexHour,
-            sitemap_scan_interval_hours: config_1.config.sitemapScanIntervalHours,
-            recheck_after_days: config_1.config.recheckAfterDays,
-            inspection_batch_size: config_1.config.inspectionBatchSize,
+            google_configured: config.googleConfigured,
+            timezone: config.timezone,
+            default_daily_quota: config.defaultDailyQuota,
+            auto_index_hour: config.autoIndexHour,
+            sitemap_scan_interval_hours: config.sitemapScanIntervalHours,
+            recheck_after_days: config.recheckAfterDays,
+            inspection_batch_size: config.inspectionBatchSize,
         },
         user: req.user ?? null,
         workspace: req.workspace ?? null,

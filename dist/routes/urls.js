@@ -1,65 +1,29 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.urlsRouter = void 0;
-const express_1 = require("express");
-const kysely_1 = require("kysely");
-const db_1 = require("../db");
-const types_1 = require("../db/types");
-const auth_1 = require("../middleware/auth");
-const crypto_1 = require("../lib/crypto");
-const scheduler_1 = require("../services/scheduler");
-const sites_1 = require("../services/sites");
-const sitemapParser_1 = require("../services/sitemapParser");
-const tasks = __importStar(require("../services/tasks"));
-const urlService = __importStar(require("../services/urls"));
-const templating_1 = require("../templating");
-const auth_2 = require("./auth");
-exports.urlsRouter = (0, express_1.Router)();
-exports.urlsRouter.use(...auth_2.panelAuth);
+import { Router } from "express";
+import { sql } from "kysely";
+import { db } from "../db/index.js";
+import { IndexStatus, isDomainProperty } from "../db/types.js";
+import { asyncHandler, flash, requireSite } from "../middleware/auth.js";
+import { sha256 } from "../lib/crypto.js";
+import { runInBackground } from "../services/scheduler.js";
+import { listSites } from "../services/sites.js";
+import { urlBelongsToSite } from "../services/sitemapParser.js";
+import * as tasks from "../services/tasks.js";
+import * as urlService from "../services/urls.js";
+import { baseContext } from "../templating.js";
+import { panelAuth } from "./auth.js";
+export const urlsRouter = Router();
+urlsRouter.use(...panelAuth);
 const PER_PAGE = 100;
 function formBool(value) {
     return value === "on" || value === "true" || value === "1" || value === true;
 }
-exports.urlsRouter.get("/", (0, auth_1.asyncHandler)(async (req, res) => {
+urlsRouter.get("/", asyncHandler(async (req, res) => {
     const workspace = req.workspace;
     const siteId = Number(req.query.site_id) || 0;
     const status = typeof req.query.status === "string" ? req.query.status : "";
     const q = typeof req.query.q === "string" ? req.query.q : "";
     const page = Math.max(1, Number(req.query.page) || 1);
-    let query = db_1.db
+    let query = db
         .selectFrom("urls")
         .innerJoin("sites", "sites.id", "urls.site_id")
         .where("sites.workspace_id", "=", workspace.id);
@@ -70,19 +34,19 @@ exports.urlsRouter.get("/", (0, auth_1.asyncHandler)(async (req, res) => {
     if (q)
         query = query.where("urls.url", "like", `%${q}%`);
     const totalRow = await query
-        .select((0, kysely_1.sql) `COUNT(urls.id)`.as("total"))
+        .select(sql `COUNT(urls.id)`.as("total"))
         .executeTakeFirst();
     const total = Number(totalRow?.total ?? 0);
     const rows = await query
         .selectAll("urls")
-        .orderBy((0, kysely_1.sql) `urls.last_checked_at IS NULL`, "desc")
+        .orderBy(sql `urls.last_checked_at IS NULL`, "desc")
         .orderBy("urls.id", "desc")
         .offset((page - 1) * PER_PAGE)
         .limit(PER_PAGE)
         .execute();
-    const sites = await (0, sites_1.listSites)(workspace.id);
+    const sites = await listSites(workspace.id);
     const siteMap = Object.fromEntries(sites.map((s) => [s.id, s]));
-    res.render("urls.html", (0, templating_1.baseContext)(req, {
+    res.render("urls.html", baseContext(req, {
         user: req.user,
         workspace,
         rows,
@@ -94,14 +58,14 @@ exports.urlsRouter.get("/", (0, auth_1.asyncHandler)(async (req, res) => {
         filter_site: siteId,
         filter_status: status,
         query: q,
-        statuses: Object.values(types_1.IndexStatus),
+        statuses: Object.values(IndexStatus),
         stats: await urlService.workspaceUrlStats(workspace.id),
         active_page: "urls",
     }));
 }));
-exports.urlsRouter.post("/add", (0, auth_1.asyncHandler)(async (req, res) => {
+urlsRouter.post("/add", asyncHandler(async (req, res) => {
     const siteId = Number(req.body.site_id);
-    const site = await (0, auth_1.requireSite)(req, siteId);
+    const site = await requireSite(req, siteId);
     let blob = String(req.body.urls_blob ?? "");
     const file = req.file;
     if (file?.buffer) {
@@ -109,15 +73,15 @@ exports.urlsRouter.post("/add", (0, auth_1.asyncHandler)(async (req, res) => {
             blob += `\n${file.buffer.toString("utf8")}`;
         }
         catch {
-            (0, auth_1.flash)(req, "Nie udalo sie odczytac pliku.", "error");
+            flash(req, "Nie udalo sie odczytac pliku.", "error");
         }
     }
     const candidates = urlService.parseUrlBlob(blob);
     if (candidates.length === 0) {
-        (0, auth_1.flash)(req, "Nie znaleziono zadnego poprawnego adresu URL.", "error");
+        flash(req, "Nie znaleziono zadnego poprawnego adresu URL.", "error");
         return res.redirect(303, `/sites/${siteId}?tab=urls`);
     }
-    const valid = candidates.filter((u) => (0, sitemapParser_1.urlBelongsToSite)(u, site.home_url, (0, types_1.isDomainProperty)(site)));
+    const valid = candidates.filter((u) => urlBelongsToSite(u, site.home_url, isDomainProperty(site)));
     const rejected = candidates.length - valid.length;
     const priority = Number(req.body.priority) || 0;
     const result = await urlService.addUrls(site, valid, "manual", new Map(), priority);
@@ -125,21 +89,21 @@ exports.urlsRouter.post("/add", (0, auth_1.asyncHandler)(async (req, res) => {
     if (rejected) {
         message += ` Odrzucono ${rejected} adresow spoza domeny ${site.display_name}.`;
     }
-    (0, auth_1.flash)(req, message, result.added ? "success" : "warning");
+    flash(req, message, result.added ? "success" : "warning");
     if (formBool(req.body.submit_now) && result.added) {
-        const hashes = valid.map((u) => (0, crypto_1.sha256)(u));
-        const newIds = (await db_1.db
+        const hashes = valid.map((u) => sha256(u));
+        const newIds = (await db
             .selectFrom("urls")
             .select("id")
             .where("site_id", "=", site.id)
             .where("url_hash", "in", hashes)
             .execute()).map((r) => r.id);
-        (0, scheduler_1.runInBackground)(`site:${site.id}`, () => tasks.taskSubmitUrls(site.id, newIds));
-        (0, auth_1.flash)(req, "Zgloszenie do Google uruchomione w tle.", "success");
+        runInBackground(`site:${site.id}`, () => tasks.taskSubmitUrls(site.id, newIds));
+        flash(req, "Zgloszenie do Google uruchomione w tle.", "success");
     }
     res.redirect(303, `/sites/${siteId}?tab=urls`);
 }));
-exports.urlsRouter.post("/action", (0, auth_1.asyncHandler)(async (req, res) => {
+urlsRouter.post("/action", asyncHandler(async (req, res) => {
     const action = String(req.body.action ?? "");
     const redirectTo = String(req.body.redirect_to ?? "/urls");
     const rawIds = req.body.url_ids;
@@ -147,10 +111,10 @@ exports.urlsRouter.post("/action", (0, auth_1.asyncHandler)(async (req, res) => 
         .map((v) => Number(v))
         .filter((n) => Number.isFinite(n) && n > 0);
     if (urlIds.length === 0) {
-        (0, auth_1.flash)(req, "Nie zaznaczono zadnego URL-a.", "warning");
+        flash(req, "Nie zaznaczono zadnego URL-a.", "warning");
         return res.redirect(303, redirectTo);
     }
-    const pages = await db_1.db
+    const pages = await db
         .selectFrom("urls")
         .innerJoin("sites", "sites.id", "urls.site_id")
         .selectAll("urls")
@@ -158,7 +122,7 @@ exports.urlsRouter.post("/action", (0, auth_1.asyncHandler)(async (req, res) => 
         .where("sites.workspace_id", "=", req.workspace.id)
         .execute();
     if (pages.length === 0) {
-        (0, auth_1.flash)(req, "Nie znaleziono wskazanych URL-i.", "error");
+        flash(req, "Nie znaleziono wskazanych URL-i.", "error");
         return res.redirect(303, redirectTo);
     }
     const bySite = new Map();
@@ -169,49 +133,49 @@ exports.urlsRouter.post("/action", (0, auth_1.asyncHandler)(async (req, res) => 
     }
     if (action === "submit") {
         for (const [siteId, ids] of bySite) {
-            (0, scheduler_1.runInBackground)(`site:${siteId}`, () => tasks.taskSubmitUrls(siteId, ids));
+            runInBackground(`site:${siteId}`, () => tasks.taskSubmitUrls(siteId, ids));
         }
-        (0, auth_1.flash)(req, `Zgloszono ${pages.length} URL-i do indeksowania (w tle).`, "success");
+        flash(req, `Zgloszono ${pages.length} URL-i do indeksowania (w tle).`, "success");
     }
     else if (action === "inspect") {
         for (const [siteId, ids] of bySite) {
-            (0, scheduler_1.runInBackground)(`site:${siteId}`, () => tasks.taskInspectUrls(siteId, ids));
+            runInBackground(`site:${siteId}`, () => tasks.taskInspectUrls(siteId, ids));
         }
-        (0, auth_1.flash)(req, `Uruchomiono inspekcje ${pages.length} URL-i (w tle).`, "success");
+        flash(req, `Uruchomiono inspekcje ${pages.length} URL-i (w tle).`, "success");
     }
     else if (action === "delete") {
-        await db_1.db
+        await db
             .deleteFrom("urls")
             .where("id", "in", pages.map((p) => p.id))
             .execute();
-        (0, auth_1.flash)(req, `Usunieto ${pages.length} URL-i.`, "success");
+        flash(req, `Usunieto ${pages.length} URL-i.`, "success");
     }
     else if (action === "priority") {
-        await db_1.db
+        await db
             .updateTable("urls")
             .set({ priority: 10 })
             .where("id", "in", pages.map((p) => p.id))
             .execute();
-        (0, auth_1.flash)(req, `Ustawiono wysoki priorytet dla ${pages.length} URL-i.`, "success");
+        flash(req, `Ustawiono wysoki priorytet dla ${pages.length} URL-i.`, "success");
     }
     else if (action === "reset") {
-        await db_1.db
+        await db
             .updateTable("urls")
-            .set({ index_status: types_1.IndexStatus.UNKNOWN, last_checked_at: null })
+            .set({ index_status: IndexStatus.UNKNOWN, last_checked_at: null })
             .where("id", "in", pages.map((p) => p.id))
             .execute();
-        (0, auth_1.flash)(req, `Zresetowano status ${pages.length} URL-i.`, "success");
+        flash(req, `Zresetowano status ${pages.length} URL-i.`, "success");
     }
     else {
-        (0, auth_1.flash)(req, `Nieznana akcja: ${action}`, "error");
+        flash(req, `Nieznana akcja: ${action}`, "error");
     }
     res.redirect(303, redirectTo);
 }));
-exports.urlsRouter.get("/export.csv", (0, auth_1.asyncHandler)(async (req, res) => {
+urlsRouter.get("/export.csv", asyncHandler(async (req, res) => {
     const workspace = req.workspace;
     const siteId = Number(req.query.site_id) || 0;
     const status = typeof req.query.status === "string" ? req.query.status : "";
-    let query = db_1.db
+    let query = db
         .selectFrom("urls")
         .innerJoin("sites", "sites.id", "urls.site_id")
         .select([

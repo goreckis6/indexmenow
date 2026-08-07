@@ -1,8 +1,5 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.migrate = migrate;
-const kysely_1 = require("kysely");
-const _1 = require(".");
+import { sql } from "kysely";
+import { db } from "./index.js";
 /**
  * Schemat tworzony przy starcie aplikacji.
  *
@@ -212,9 +209,9 @@ const STATEMENTS = [
     heartbeat_at DATETIME NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
-async function migrate() {
+export async function migrate() {
     for (const statement of STATEMENTS) {
-        await kysely_1.sql.raw(statement).execute(_1.db);
+        await sql.raw(statement).execute(db);
     }
 }
 //# sourceMappingURL=migrate.js.map

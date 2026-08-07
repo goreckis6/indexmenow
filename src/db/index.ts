@@ -1,7 +1,7 @@
 import { Kysely, MysqlDialect } from "kysely";
 import mysql from "mysql2";
-import { config } from "../config";
-import type { Database } from "./types";
+import { config } from "../config.js";
+import type { Database } from "./types.js";
 
 export const pool = mysql.createPool({
   host: config.db.host,

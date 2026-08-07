@@ -1,4 +1,4 @@
-import { encodeProperty, googleRequest } from "./http";
+import { encodeProperty, googleRequest } from "./http.js";
 
 const WEBMASTERS_BASE = "https://www.googleapis.com/webmasters/v3";
 const SEARCHCONSOLE_BASE = "https://searchconsole.googleapis.com/v1";

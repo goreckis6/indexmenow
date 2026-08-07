@@ -1,8 +1,8 @@
 import { sql } from "kysely";
-import { db } from "../db";
-import { IndexStatus, type PageUrl, type Site } from "../db/types";
-import { sha256 } from "../lib/crypto";
-import { daysAgo } from "../lib/dates";
+import { db } from "../db/index.js";
+import { IndexStatus, type PageUrl, type Site } from "../db/types.js";
+import { sha256 } from "../lib/crypto.js";
+import { daysAgo } from "../lib/dates.js";
 
 const TRACKING_PARAMS = new Set([
   "utm_source",

@@ -1,10 +1,5 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.GoogleApiError = void 0;
-exports.parseError = parseError;
-exports.safeJson = safeJson;
 /** Blad z dowolnego endpointu Google, sprowadzony do jednego kształtu. */
-class GoogleApiError extends Error {
+export class GoogleApiError extends Error {
     statusCode;
     payload;
     constructor(message, statusCode, payload) {
@@ -23,11 +18,10 @@ class GoogleApiError extends Error {
         return this.statusCode ? `[${this.statusCode}] ${this.message}` : this.message;
     }
 }
-exports.GoogleApiError = GoogleApiError;
 function isRecord(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function parseError(statusCode, body) {
+export function parseError(statusCode, body) {
     if (isRecord(body)) {
         const err = body["error"];
         if (isRecord(err)) {
@@ -48,7 +42,7 @@ function parseError(statusCode, body) {
  * potrafi przyslac HTML. Zwracamy wtedy surowy tekst, zeby komunikat
  * w panelu nie byl pusty.
  */
-async function safeJson(response) {
+export async function safeJson(response) {
     const text = await response.text();
     if (!text)
         return "";

@@ -1,19 +1,12 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.HttpError = exports.resolveWorkspace = exports.requireApiAuth = exports.requireAuth = exports.loadUser = void 0;
-exports.flash = flash;
-exports.popFlashes = popFlashes;
-exports.asyncHandler = asyncHandler;
-exports.requireSite = requireSite;
-const db_1 = require("../db");
-const workspaces_1 = require("../services/workspaces");
-function flash(req, message, category = "success") {
+import { db } from "../db/index.js";
+import { createDefaultWorkspace } from "../services/workspaces.js";
+export function flash(req, message, category = "success") {
     const messages = req.session._flashes ?? [];
     messages.push({ message, category });
     // Trzymamy tylko ostatnie piec, zeby ciasteczko sesji nie rosło bez konca.
     req.session._flashes = messages.slice(-5);
 }
-function popFlashes(req) {
+export function popFlashes(req) {
     const messages = req.session?._flashes ?? [];
     if (req.session)
         req.session._flashes = [];
@@ -24,16 +17,16 @@ function popFlashes(req) {
  * w handlerach async wymaga opakowania - bez tego odrzucona obietnica
  * konczy sie zawieszonym zadaniem, a nie strona bledu.
  */
-function asyncHandler(fn) {
+export function asyncHandler(fn) {
     return (req, res, next) => {
         void fn(req, res, next).catch(next);
     };
 }
-exports.loadUser = asyncHandler(async (req, _res, next) => {
+export const loadUser = asyncHandler(async (req, _res, next) => {
     const userId = req.session?.user_id;
     if (!userId)
         return next();
-    const user = await db_1.db.selectFrom("users").selectAll().where("id", "=", userId).executeTakeFirst();
+    const user = await db.selectFrom("users").selectAll().where("id", "=", userId).executeTakeFirst();
     if (!user || !user.is_active) {
         req.session.destroy(() => undefined);
         return next();
@@ -41,27 +34,25 @@ exports.loadUser = asyncHandler(async (req, _res, next) => {
     req.user = user;
     next();
 });
-const requireAuth = (req, res, next) => {
+export const requireAuth = (req, res, next) => {
     if (req.user)
         return next();
     const target = req.path === "/" || req.path === "/login" ? "/login" : `/login?next=${encodeURIComponent(req.originalUrl)}`;
     res.redirect(303, target);
 };
-exports.requireAuth = requireAuth;
-const requireApiAuth = (req, res, next) => {
+export const requireApiAuth = (req, res, next) => {
     if (req.user)
         return next();
     res.status(401).json({ detail: "Not authenticated" });
 };
-exports.requireApiAuth = requireApiAuth;
 /** Ustala aktywny workspace, tworzac domyslny przy pierwszym wejsciu. */
-exports.resolveWorkspace = asyncHandler(async (req, _res, next) => {
+export const resolveWorkspace = asyncHandler(async (req, _res, next) => {
     const user = req.user;
     if (!user)
         return next();
     let workspace;
     if (req.session.workspace_id) {
-        workspace = await db_1.db
+        workspace = await db
             .selectFrom("workspaces")
             .selectAll()
             .where("id", "=", req.session.workspace_id)
@@ -69,7 +60,7 @@ exports.resolveWorkspace = asyncHandler(async (req, _res, next) => {
             .executeTakeFirst();
     }
     if (!workspace) {
-        workspace = await db_1.db
+        workspace = await db
             .selectFrom("workspaces")
             .selectAll()
             .where("user_id", "=", user.id)
@@ -77,13 +68,13 @@ exports.resolveWorkspace = asyncHandler(async (req, _res, next) => {
             .executeTakeFirst();
     }
     if (!workspace) {
-        workspace = await (0, workspaces_1.createDefaultWorkspace)(user);
+        workspace = await createDefaultWorkspace(user);
     }
     req.session.workspace_id = workspace.id;
     req.workspace = workspace;
     next();
 });
-class HttpError extends Error {
+export class HttpError extends Error {
     status;
     constructor(status, message) {
         super(message);
@@ -91,12 +82,11 @@ class HttpError extends Error {
         this.name = "HttpError";
     }
 }
-exports.HttpError = HttpError;
-async function requireSite(req, siteId) {
+export async function requireSite(req, siteId) {
     const workspace = req.workspace;
     if (!workspace)
         throw new HttpError(500, "Brak kontekstu workspace.");
-    const site = await db_1.db
+    const site = await db
         .selectFrom("sites")
         .selectAll()
         .where("id", "=", siteId)

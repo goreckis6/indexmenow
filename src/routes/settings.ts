@@ -1,16 +1,16 @@
 import { Router } from "express";
-import { db } from "../db";
-import { GoogleApiError } from "../google/errors";
-import * as oauth from "../google/oauth";
-import * as gsc from "../google/searchConsole";
-import { getServiceAccountToken, parseServiceAccountJson } from "../google/serviceAccount";
-import { encrypt } from "../lib/crypto";
-import { asyncHandler, flash } from "../middleware/auth";
-import * as quota from "../services/quota";
-import { nextRunTimes, runningTasks } from "../services/scheduler";
-import { createWorkspace, listWorkspaces } from "../services/workspaces";
-import { baseContext } from "../templating";
-import { panelAuth } from "./auth";
+import { db } from "../db/index.js";
+import { GoogleApiError } from "../google/errors.js";
+import * as oauth from "../google/oauth.js";
+import * as gsc from "../google/searchConsole.js";
+import { getServiceAccountToken, parseServiceAccountJson } from "../google/serviceAccount.js";
+import { encrypt } from "../lib/crypto.js";
+import { asyncHandler, flash } from "../middleware/auth.js";
+import * as quota from "../services/quota.js";
+import { nextRunTimes, runningTasks } from "../services/scheduler.js";
+import { createWorkspace, listWorkspaces } from "../services/workspaces.js";
+import { baseContext } from "../templating.js";
+import { panelAuth } from "./auth.js";
 
 export const settingsRouter = Router();
 settingsRouter.use(...panelAuth);

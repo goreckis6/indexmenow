@@ -1,5 +1,5 @@
-import { db } from "../db";
-import { migrate } from "../db/migrate";
+import { db } from "../db/index.js";
+import { migrate } from "../db/migrate.js";
 
 async function main(): Promise<void> {
   await migrate();

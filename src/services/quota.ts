@@ -1,7 +1,7 @@
 import { sql } from "kysely";
-import { db } from "../db";
-import { Engine, JobStatus, type Workspace } from "../db/types";
-import { dayRange, daysAgo, todayIso } from "../lib/dates";
+import { db } from "../db/index.js";
+import { Engine, JobStatus, type Workspace } from "../db/types.js";
+import { dayRange, daysAgo, todayIso } from "../lib/dates.js";
 
 export async function getUsage(
   workspaceId: number,

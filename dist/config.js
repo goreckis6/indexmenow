@@ -1,14 +1,11 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.config = exports.ROOT_DIR = void 0;
-const node_path_1 = __importDefault(require("node:path"));
-const node_crypto_1 = __importDefault(require("node:crypto"));
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
-exports.ROOT_DIR = node_path_1.default.resolve(__dirname, "..");
+import path from "node:path";
+import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
+dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+export const ROOT_DIR = path.resolve(__dirname, "..");
 function str(name, fallback = "") {
     const value = process.env[name];
     return value === undefined || value === "" ? fallback : value;
@@ -105,7 +102,7 @@ function databaseConfig() {
 const baseUrl = str("BASE_URL", "http://localhost:8006").replace(/\/+$/, "");
 const secretKey = str("SECRET_KEY", "insecure-dev-key-change-me");
 const resolvedDb = databaseConfig();
-exports.config = {
+export const config = {
     appName: "IndexMeNow",
     host: str("HOST", "0.0.0.0"),
     // Hostinger wstrzykuje PORT. Fallback 3000 jak w ich docsach Express
@@ -151,7 +148,7 @@ exports.config = {
     },
     /** Klucz AES-256 wyprowadzony z SECRET_KEY - tak samo jak w wersji Pythona. */
     get encryptionKey() {
-        return node_crypto_1.default.createHash("sha256").update(secretKey, "utf8").digest();
+        return crypto.createHash("sha256").update(secretKey, "utf8").digest();
     },
 };
 //# sourceMappingURL=config.js.map

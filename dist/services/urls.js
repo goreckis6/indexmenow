@@ -1,18 +1,8 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.normalizeUrl = normalizeUrl;
-exports.parseUrlBlob = parseUrlBlob;
-exports.addUrls = addUrls;
-exports.siteUrlStats = siteUrlStats;
-exports.workspaceUrlStats = workspaceUrlStats;
-exports.pickUrlsForInspection = pickUrlsForInspection;
-exports.pickUrlsForSubmission = pickUrlsForSubmission;
-exports.listUrls = listUrls;
-const kysely_1 = require("kysely");
-const db_1 = require("../db");
-const types_1 = require("../db/types");
-const crypto_1 = require("../lib/crypto");
-const dates_1 = require("../lib/dates");
+import { sql } from "kysely";
+import { db } from "../db/index.js";
+import { IndexStatus } from "../db/types.js";
+import { sha256 } from "../lib/crypto.js";
+import { daysAgo } from "../lib/dates.js";
 const TRACKING_PARAMS = new Set([
     "utm_source",
     "utm_medium",
@@ -23,7 +13,7 @@ const TRACKING_PARAMS = new Set([
     "fbclid",
     "msclkid",
 ]);
-function normalizeUrl(raw) {
+export function normalizeUrl(raw) {
     let value = (raw ?? "").trim();
     if (!value || value.startsWith("#"))
         return null;
@@ -51,7 +41,7 @@ function normalizeUrl(raw) {
     return parsed.toString();
 }
 /** Przyjmuje adresy rozdzielone nowa linia, przecinkiem albo spacja. */
-function parseUrlBlob(blob) {
+export function parseUrlBlob(blob) {
     const unique = [];
     const seen = new Set();
     for (const token of (blob ?? "").split(/[\s,]+/)) {
@@ -63,11 +53,11 @@ function parseUrlBlob(blob) {
     }
     return unique;
 }
-async function addUrls(site, urls, source = "manual", lastmodMap = new Map(), priority = 0) {
+export async function addUrls(site, urls, source = "manual", lastmodMap = new Map(), priority = 0) {
     const result = { added: 0, duplicates: 0, refreshed: 0, total: urls.length };
     if (urls.length === 0)
         return result;
-    const existingRows = await db_1.db
+    const existingRows = await db
         .selectFrom("urls")
         .select(["url", "url_hash", "lastmod"])
         .where("site_id", "=", site.id)
@@ -75,13 +65,13 @@ async function addUrls(site, urls, source = "manual", lastmodMap = new Map(), pr
     const existing = new Map(existingRows.map((row) => [row.url_hash, row]));
     const toInsert = [];
     for (const url of urls) {
-        const hash = (0, crypto_1.sha256)(url);
+        const hash = sha256(url);
         const found = existing.get(hash);
         if (found) {
             result.duplicates += 1;
             const lastmod = lastmodMap.get(url);
             if (lastmod && found.lastmod?.getTime() !== lastmod.getTime()) {
-                await db_1.db
+                await db
                     .updateTable("urls")
                     .set({ lastmod })
                     .where("site_id", "=", site.id)
@@ -105,39 +95,39 @@ async function addUrls(site, urls, source = "manual", lastmodMap = new Map(), pr
     // Sitemapa moze miec dziesiatki tysiecy adresow, a MySQL ma limit rozmiaru
     // pojedynczego zapytania - stad porcje po 500.
     for (let i = 0; i < toInsert.length; i += 500) {
-        await db_1.db.insertInto("urls").values(toInsert.slice(i, i + 500)).execute();
+        await db.insertInto("urls").values(toInsert.slice(i, i + 500)).execute();
     }
     return result;
 }
 function emptyCounts() {
-    return Object.fromEntries(Object.values(types_1.IndexStatus).map((status) => [status, 0]));
+    return Object.fromEntries(Object.values(IndexStatus).map((status) => [status, 0]));
 }
 function summarize(rows) {
     const counts = emptyCounts();
     for (const row of rows)
         counts[row.index_status] = Number(row.total);
-    const total = Object.values(types_1.IndexStatus).reduce((sum, status) => sum + (counts[status] ?? 0), 0);
+    const total = Object.values(IndexStatus).reduce((sum, status) => sum + (counts[status] ?? 0), 0);
     // Adresy o nieznanym statusie nie wchodza do pokrycia - inaczej swiezo dodana
     // strona pokazywalaby 0% mimo tego, ze nic jeszcze nie sprawdzono.
-    const known = total - (counts[types_1.IndexStatus.UNKNOWN] ?? 0);
-    const coverage = known ? Math.round(((counts[types_1.IndexStatus.INDEXED] ?? 0) / known) * 1000) / 10 : 0;
+    const known = total - (counts[IndexStatus.UNKNOWN] ?? 0);
+    const coverage = known ? Math.round(((counts[IndexStatus.INDEXED] ?? 0) / known) * 1000) / 10 : 0;
     return { ...counts, total, coverage };
 }
-async function siteUrlStats(siteId) {
-    const rows = await db_1.db
+export async function siteUrlStats(siteId) {
+    const rows = await db
         .selectFrom("urls")
-        .select(["index_status", (0, kysely_1.sql) `COUNT(id)`.as("total")])
+        .select(["index_status", sql `COUNT(id)`.as("total")])
         .where("site_id", "=", siteId)
         .where("is_active", "=", true)
         .groupBy("index_status")
         .execute();
     return summarize(rows);
 }
-async function workspaceUrlStats(workspaceId) {
-    const rows = await db_1.db
+export async function workspaceUrlStats(workspaceId) {
+    const rows = await db
         .selectFrom("urls")
         .innerJoin("sites", "sites.id", "urls.site_id")
-        .select(["urls.index_status as index_status", (0, kysely_1.sql) `COUNT(urls.id)`.as("total")])
+        .select(["urls.index_status as index_status", sql `COUNT(urls.id)`.as("total")])
         .where("sites.workspace_id", "=", workspaceId)
         .where("urls.is_active", "=", true)
         .groupBy("urls.index_status")
@@ -145,8 +135,8 @@ async function workspaceUrlStats(workspaceId) {
     return summarize(rows);
 }
 /** Najpierw nigdy nie sprawdzane, potem najbardziej przedawnione. */
-async function pickUrlsForInspection(siteId, limit, recheckDays) {
-    const neverChecked = await db_1.db
+export async function pickUrlsForInspection(siteId, limit, recheckDays) {
+    const neverChecked = await db
         .selectFrom("urls")
         .selectAll()
         .where("site_id", "=", siteId)
@@ -158,42 +148,42 @@ async function pickUrlsForInspection(siteId, limit, recheckDays) {
         .execute();
     if (neverChecked.length >= limit)
         return neverChecked;
-    const stale = await db_1.db
+    const stale = await db
         .selectFrom("urls")
         .selectAll()
         .where("site_id", "=", siteId)
         .where("is_active", "=", true)
         .where("last_checked_at", "is not", null)
-        .where("last_checked_at", "<", (0, dates_1.daysAgo)(recheckDays))
-        .where("index_status", "!=", types_1.IndexStatus.INDEXED)
+        .where("last_checked_at", "<", daysAgo(recheckDays))
+        .where("index_status", "!=", IndexStatus.INDEXED)
         .orderBy("last_checked_at")
         .limit(limit - neverChecked.length)
         .execute();
     return [...neverChecked, ...stale];
 }
 /** Najpierw potwierdzone niezaindeksowane, potem o nieznanym statusie. */
-async function pickUrlsForSubmission(siteId, limit) {
-    const notIndexed = await db_1.db
+export async function pickUrlsForSubmission(siteId, limit) {
+    const notIndexed = await db
         .selectFrom("urls")
         .selectAll()
         .where("site_id", "=", siteId)
         .where("is_active", "=", true)
-        .where("index_status", "in", [types_1.IndexStatus.NOT_INDEXED, types_1.IndexStatus.ERROR])
+        .where("index_status", "in", [IndexStatus.NOT_INDEXED, IndexStatus.ERROR])
         .orderBy("priority", "desc")
         // Adresy nigdy nie zglaszane maja pierwszenstwo przed tymi, ktore juz raz poszly.
-        .orderBy((0, kysely_1.sql) `last_submitted_at IS NOT NULL`)
+        .orderBy(sql `last_submitted_at IS NOT NULL`)
         .orderBy("last_submitted_at")
         .orderBy("id")
         .limit(limit)
         .execute();
     if (notIndexed.length >= limit)
         return notIndexed;
-    const unknown = await db_1.db
+    const unknown = await db
         .selectFrom("urls")
         .selectAll()
         .where("site_id", "=", siteId)
         .where("is_active", "=", true)
-        .where("index_status", "=", types_1.IndexStatus.UNKNOWN)
+        .where("index_status", "=", IndexStatus.UNKNOWN)
         .where("last_submitted_at", "is", null)
         .orderBy("priority", "desc")
         .orderBy("id")
@@ -201,9 +191,9 @@ async function pickUrlsForSubmission(siteId, limit) {
         .execute();
     return [...notIndexed, ...unknown];
 }
-async function listUrls(options) {
+export async function listUrls(options) {
     const { workspaceId, siteId, status, search, page = 1, perPage = 50 } = options;
-    let query = db_1.db
+    let query = db
         .selectFrom("urls")
         .innerJoin("sites", "sites.id", "urls.site_id")
         .where("sites.workspace_id", "=", workspaceId);
@@ -214,7 +204,7 @@ async function listUrls(options) {
     if (search)
         query = query.where("urls.url", "like", `%${search}%`);
     const totalRow = await query
-        .select((0, kysely_1.sql) `COUNT(urls.id)`.as("total"))
+        .select(sql `COUNT(urls.id)`.as("total"))
         .executeTakeFirst();
     const total = Number(totalRow?.total ?? 0);
     const rows = await query

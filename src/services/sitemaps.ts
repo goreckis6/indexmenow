@@ -1,13 +1,13 @@
-import { db } from "../db";
-import { JobStatus, JobType, isDomainProperty, type Site, type Sitemap } from "../db/types";
-import { GoogleApiError } from "../google/errors";
-import { getAccessToken } from "../google/oauth";
-import * as gsc from "../google/searchConsole";
-import { sha256 } from "../lib/crypto";
-import { parseDate } from "../lib/dates";
-import { logEvent } from "./activity";
-import * as sitemapParser from "./sitemapParser";
-import { addUrls } from "./urls";
+import { db } from "../db/index.js";
+import { JobStatus, JobType, isDomainProperty, type Site, type Sitemap } from "../db/types.js";
+import { GoogleApiError } from "../google/errors.js";
+import { getAccessToken } from "../google/oauth.js";
+import * as gsc from "../google/searchConsole.js";
+import { sha256 } from "../lib/crypto.js";
+import { parseDate } from "../lib/dates.js";
+import { logEvent } from "./activity.js";
+import * as sitemapParser from "./sitemapParser.js";
+import { addUrls } from "./urls.js";
 
 const USER_AGENT = "IndexMeNow/1.0 (+sitemap-crawler)";
 

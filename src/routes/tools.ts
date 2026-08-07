@@ -1,15 +1,15 @@
 import { Router } from "express";
-import { db } from "../db";
-import { JobStatus, JobType, type PageUrl } from "../db/types";
-import { sha256 } from "../lib/crypto";
-import { asyncHandler, flash, requireSite } from "../middleware/auth";
-import * as indexer from "../services/indexer";
-import { fetchPageMeta } from "../services/seoTools";
-import { crawlSitemap } from "../services/sitemapParser";
-import { listSites } from "../services/sites";
-import { normalizeUrl, parseUrlBlob } from "../services/urls";
-import { baseContext } from "../templating";
-import { panelAuth } from "./auth";
+import { db } from "../db/index.js";
+import { JobStatus, JobType, type PageUrl } from "../db/types.js";
+import { sha256 } from "../lib/crypto.js";
+import { asyncHandler, flash, requireSite } from "../middleware/auth.js";
+import * as indexer from "../services/indexer.js";
+import { fetchPageMeta } from "../services/seoTools.js";
+import { crawlSitemap } from "../services/sitemapParser.js";
+import { listSites } from "../services/sites.js";
+import { normalizeUrl, parseUrlBlob } from "../services/urls.js";
+import { baseContext } from "../templating.js";
+import { panelAuth } from "./auth.js";
 
 export const toolsRouter = Router();
 toolsRouter.use(...panelAuth);

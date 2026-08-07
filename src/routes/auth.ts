@@ -1,20 +1,20 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import { config } from "../config";
-import { db } from "../db";
-import { GoogleApiError } from "../google/errors";
-import * as oauth from "../google/oauth";
-import { decrypt, generateState } from "../lib/crypto";
+import { config } from "../config.js";
+import { db } from "../db/index.js";
+import { GoogleApiError } from "../google/errors.js";
+import * as oauth from "../google/oauth.js";
+import { decrypt, generateState } from "../lib/crypto.js";
 import {
   asyncHandler,
   flash,
   loadUser,
   requireAuth,
   resolveWorkspace,
-} from "../middleware/auth";
-import { logEvent } from "../services/activity";
-import { createDefaultWorkspace } from "../services/workspaces";
-import { baseContext } from "../templating";
+} from "../middleware/auth.js";
+import { logEvent } from "../services/activity.js";
+import { createDefaultWorkspace } from "../services/workspaces.js";
+import { baseContext } from "../templating.js";
 
 export const authRouter = Router();
 

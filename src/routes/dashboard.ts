@@ -1,15 +1,15 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import { Engine } from "../db/types";
-import { db } from "../db";
-import { asyncHandler } from "../middleware/auth";
-import * as quota from "../services/quota";
-import { nextRunTimes, runningTasks } from "../services/scheduler";
-import { jobTotals, recentJobs, workspaceIndexingHistory } from "../services/stats";
-import { workspaceUrlStats } from "../services/urls";
-import { listWorkspaces } from "../services/workspaces";
-import { baseContext } from "../templating";
-import { panelAuth } from "./auth";
+import { Engine } from "../db/types.js";
+import { db } from "../db/index.js";
+import { asyncHandler } from "../middleware/auth.js";
+import * as quota from "../services/quota.js";
+import { nextRunTimes, runningTasks } from "../services/scheduler.js";
+import { jobTotals, recentJobs, workspaceIndexingHistory } from "../services/stats.js";
+import { workspaceUrlStats } from "../services/urls.js";
+import { listWorkspaces } from "../services/workspaces.js";
+import { baseContext } from "../templating.js";
+import { panelAuth } from "./auth.js";
 
 export const dashboardRouter = Router();
 

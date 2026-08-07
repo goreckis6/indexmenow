@@ -1,5 +1,5 @@
 import { JWT } from "google-auth-library";
-import { GoogleApiError } from "./errors";
+import { GoogleApiError } from "./errors.js";
 
 export const INDEXING_SCOPE = "https://www.googleapis.com/auth/indexing";
 export const WEBMASTERS_SCOPE = "https://www.googleapis.com/auth/webmasters";

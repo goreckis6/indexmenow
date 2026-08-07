@@ -1,5 +1,5 @@
 import { sql } from "kysely";
-import { db } from ".";
+import { db } from "./index.js";
 
 /**
  * Schemat tworzony przy starcie aplikacji.

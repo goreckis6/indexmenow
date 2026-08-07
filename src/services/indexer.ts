@@ -1,5 +1,5 @@
-import { config } from "../config";
-import { db } from "../db";
+import { config } from "../config.js";
+import { db } from "../db/index.js";
 import {
   Engine,
   IndexStatus,
@@ -8,19 +8,19 @@ import {
   type PageUrl,
   type Site,
   type Workspace,
-} from "../db/types";
-import { GoogleApiError } from "../google/errors";
-import * as indexing from "../google/indexing";
-import * as indexnow from "../google/indexnow";
-import { getAccessToken } from "../google/oauth";
-import * as gsc from "../google/searchConsole";
-import { credentialsInfo, getServiceAccountToken } from "../google/serviceAccount";
-import { decrypt } from "../lib/crypto";
-import { logEvent } from "./activity";
-import * as quota from "./quota";
-import { scanAllSitemaps } from "./sitemaps";
-import { recordSiteSnapshot } from "./stats";
-import { pickUrlsForInspection, pickUrlsForSubmission } from "./urls";
+} from "../db/types.js";
+import { GoogleApiError } from "../google/errors.js";
+import * as indexing from "../google/indexing.js";
+import * as indexnow from "../google/indexnow.js";
+import { getAccessToken } from "../google/oauth.js";
+import * as gsc from "../google/searchConsole.js";
+import { credentialsInfo, getServiceAccountToken } from "../google/serviceAccount.js";
+import { decrypt } from "../lib/crypto.js";
+import { logEvent } from "./activity.js";
+import * as quota from "./quota.js";
+import { scanAllSitemaps } from "./sitemaps.js";
+import { recordSiteSnapshot } from "./stats.js";
+import { pickUrlsForInspection, pickUrlsForSubmission } from "./urls.js";
 
 const EXCLUSION_MARKERS = [
   "excluded",

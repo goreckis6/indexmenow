@@ -1,37 +1,31 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.WEBMASTERS_SCOPE = exports.INDEXING_SCOPE = void 0;
-exports.parseServiceAccountJson = parseServiceAccountJson;
-exports.getServiceAccountToken = getServiceAccountToken;
-exports.credentialsInfo = credentialsInfo;
-const google_auth_library_1 = require("google-auth-library");
-const errors_1 = require("./errors");
-exports.INDEXING_SCOPE = "https://www.googleapis.com/auth/indexing";
-exports.WEBMASTERS_SCOPE = "https://www.googleapis.com/auth/webmasters";
-function parseServiceAccountJson(raw) {
+import { JWT } from "google-auth-library";
+import { GoogleApiError } from "./errors.js";
+export const INDEXING_SCOPE = "https://www.googleapis.com/auth/indexing";
+export const WEBMASTERS_SCOPE = "https://www.googleapis.com/auth/webmasters";
+export function parseServiceAccountJson(raw) {
     let info;
     try {
         info = JSON.parse(raw);
     }
     catch {
-        throw new errors_1.GoogleApiError("Plik nie jest poprawnym JSON-em konta serwisowego.");
+        throw new GoogleApiError("Plik nie jest poprawnym JSON-em konta serwisowego.");
     }
     if (typeof info !== "object" || info === null) {
-        throw new errors_1.GoogleApiError("Plik nie jest poprawnym JSON-em konta serwisowego.");
+        throw new GoogleApiError("Plik nie jest poprawnym JSON-em konta serwisowego.");
     }
     const record = info;
     if (record["type"] !== "service_account") {
-        throw new errors_1.GoogleApiError('Plik JSON musi miec pole "type": "service_account".');
+        throw new GoogleApiError('Plik JSON musi miec pole "type": "service_account".');
     }
     for (const field of ["client_email", "private_key"]) {
         if (!record[field]) {
-            throw new errors_1.GoogleApiError(`Brak pola '${field}' w pliku konta serwisowego.`);
+            throw new GoogleApiError(`Brak pola '${field}' w pliku konta serwisowego.`);
         }
     }
     return record;
 }
-async function getServiceAccountToken(info, scopes = [exports.INDEXING_SCOPE, exports.WEBMASTERS_SCOPE]) {
-    const client = new google_auth_library_1.JWT({
+export async function getServiceAccountToken(info, scopes = [INDEXING_SCOPE, WEBMASTERS_SCOPE]) {
+    const client = new JWT({
         email: info.client_email,
         // Klucze z JSON-a maja znaki nowej linii zapisane jako \n. Jesli ktos
         // przekleil klucz przez pole tekstowe, trafiaja tu doslownie i OpenSSL
@@ -47,11 +41,11 @@ async function getServiceAccountToken(info, scopes = [exports.INDEXING_SCOPE, ex
     }
     catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        throw new errors_1.GoogleApiError(`Nie udalo sie pobrac tokena konta serwisowego: ${reason}`);
+        throw new GoogleApiError(`Nie udalo sie pobrac tokena konta serwisowego: ${reason}`);
     }
 }
 /** Minimalny zestaw pol potrzebny do podpisania JWT. */
-function credentialsInfo(clientEmail, privateKey, projectId) {
+export function credentialsInfo(clientEmail, privateKey, projectId) {
     return {
         type: "service_account",
         client_email: clientEmail,

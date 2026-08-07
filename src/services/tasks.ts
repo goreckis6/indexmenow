@@ -1,8 +1,8 @@
-import { db } from "../db";
-import type { PageUrl, Site, User, Workspace } from "../db/types";
-import { logEvent } from "./activity";
-import * as indexer from "./indexer";
-import * as sitemaps from "./sitemaps";
+import { db } from "../db/index.js";
+import type { PageUrl, Site, User, Workspace } from "../db/types.js";
+import { logEvent } from "./activity.js";
+import * as indexer from "./indexer.js";
+import * as sitemaps from "./sitemaps.js";
 
 async function loadSiteContext(siteId: number): Promise<{
   site: Site;

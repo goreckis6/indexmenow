@@ -1,8 +1,8 @@
 import path from "node:path";
 import type { Express, Request } from "express";
 import nunjucks from "nunjucks";
-import { ROOT_DIR, config } from "./config";
-import { popFlashes } from "./middleware/auth";
+import { ROOT_DIR, config } from "./config.js";
+import { popFlashes } from "./middleware/auth.js";
 
 const STATUS_LABELS: Record<string, string> = {
   INDEXED: "Zaindeksowany",

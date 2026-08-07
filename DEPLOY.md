@@ -34,11 +34,10 @@ Schemat tabel tworzy się sam przy pierwszym starcie aplikacji (`migrate`).
 | Build command / script | `build` (może zostać — trzyma `dist/` jako zapas) |
 | Output directory | **puste** (nie wpisuj `dist`) |
 | Entry file | **`server.js`** (NIE `app.js`, NIE `dist/server.js`) |
-| Start | `npm start` (= `node server.js` → tsx ładuje `src/server.ts`) |
+| Start | `npm start` (= `node server.js` → ESM `dist/server.js`) |
 
-> **Dlaczego nie `node dist/server.js`?** Zależność `kysely` jest czystym ESM.
-> CommonJS z `tsc` wywala się przez `ERR_REQUIRE_ESM` i Hostinger pokazuje 503.
-> `server.js` omija to przez `tsx`.
+> Projekt jest **ESM** (`"type": "module"`). Nie używamy `tsx` na Hostingerze —
+> ich sandbox blokuje binarkę esbuild (`EACCES`). Start to czysty `node`.
 
 Jeśli po zielonym buildzie nadal widzisz 503 CDN Hostingera:
 1. **Entry file = `server.js`**, Output directory puste → Save → Redeploy.

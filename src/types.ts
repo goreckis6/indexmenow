@@ -1,7 +1,7 @@
 // Import z efektem ubocznym: bez niego deklaracje @types/express-session nie
 // trafiaja do programu i `req.session` nie istnieje dla kompilatora.
 import "express-session";
-import type { Site, User, Workspace } from "./db/types";
+import type { Site, User, Workspace } from "./db/types.js";
 
 export interface FlashMessage {
   message: string;

@@ -1,18 +1,15 @@
 /**
- * Entry Hostingera (i lokalnie: npm start).
+ * Entry Hostingera — czysty Node ESM, BEZ tsx/esbuild.
+ * (Na Hostingerze binarka esbuild ma EACCES, wiec tsx pada w runtime.)
  *
- * Problem: skompilowany dist/ to CommonJS, a kysely jest ESM-only —
- * zwykle `require("./dist/server.js")` pada z ERR_REQUIRE_ESM i proxy
- * pokazuje 503 CDN. Dlatego ladujemy zrodla przez tsx.
- *
- * Najpierw listen(PORT), potem montujemy Express — nawet przy bledzie
- * MySQL zostaje zywy proces z /healthz.
+ * Najpierw listen(PORT), potem dynamiczny import dist/server.js.
  */
-"use strict";
+import http from "node:http";
+import { pathToFileURL } from "node:url";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const http = require("node:http");
-const path = require("node:path");
-
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const port = Number.parseInt(process.env.PORT || "3000", 10);
 const startedAt = new Date().toISOString();
 
@@ -76,7 +73,6 @@ function showBootError(err) {
   <h1>IndexMeNow — blad startu</h1>
   <p>Bootloader zyje (port ${port}), aplikacja nie wstala:</p>
   <pre style="background:#111;color:#eee;padding:1rem;border-radius:8px;white-space:pre-wrap">${safe}</pre>
-  <p>Entry file w hPanel musi byc <code>server.js</code>. Output directory — puste.</p>
 </body></html>`);
   };
 }
@@ -96,29 +92,22 @@ const server = http.createServer((req, res) => {
 server.listen(port, () => {
   console.log(`[boot] listening on ${port}`);
 
-  setImmediate(() => {
-    try {
-      const tsxApi = require("tsx/cjs/api");
-      tsxApi.register();
-      const entry = path.join(__dirname, "src", "server.ts");
-      // eslint-disable-next-line import/no-dynamic-require
-      const mod = require(entry);
+  const entry = path.join(__dirname, "dist", "server.js");
+  import(pathToFileURL(entry).href)
+    .then((mod) => {
       if (typeof mod.startFromBootloader !== "function") {
-        throw new Error("src/server.ts nie eksportuje startFromBootloader");
+        throw new Error("dist/server.js nie eksportuje startFromBootloader");
       }
-      Promise.resolve(mod.startFromBootloader())
-        .then((app) => {
-          if (!app || typeof app !== "function") {
-            throw new Error("startFromBootloader nie zwrocil aplikacji Express");
-          }
-          handler = app;
-          console.log("[boot] pelna aplikacja podpieta (tsx → src/server.ts)");
-        })
-        .catch(showBootError);
-    } catch (error) {
-      showBootError(error);
-    }
-  });
+      return mod.startFromBootloader();
+    })
+    .then((app) => {
+      if (!app || typeof app !== "function") {
+        throw new Error("startFromBootloader nie zwrocil aplikacji Express");
+      }
+      handler = app;
+      console.log("[boot] pelna aplikacja podpieta (ESM dist/server.js)");
+    })
+    .catch(showBootError);
 });
 
 server.on("error", (error) => {

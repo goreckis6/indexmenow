@@ -1,16 +1,16 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import { db } from "../db";
-import { IndexStatus, isDomainProperty } from "../db/types";
-import { asyncHandler, flash, requireSite } from "../middleware/auth";
-import { sha256 } from "../lib/crypto";
-import { runInBackground } from "../services/scheduler";
-import { listSites } from "../services/sites";
-import { urlBelongsToSite } from "../services/sitemapParser";
-import * as tasks from "../services/tasks";
-import * as urlService from "../services/urls";
-import { baseContext } from "../templating";
-import { panelAuth } from "./auth";
+import { db } from "../db/index.js";
+import { IndexStatus, isDomainProperty } from "../db/types.js";
+import { asyncHandler, flash, requireSite } from "../middleware/auth.js";
+import { sha256 } from "../lib/crypto.js";
+import { runInBackground } from "../services/scheduler.js";
+import { listSites } from "../services/sites.js";
+import { urlBelongsToSite } from "../services/sitemapParser.js";
+import * as tasks from "../services/tasks.js";
+import * as urlService from "../services/urls.js";
+import { baseContext } from "../templating.js";
+import { panelAuth } from "./auth.js";
 
 export const urlsRouter = Router();
 urlsRouter.use(...panelAuth);

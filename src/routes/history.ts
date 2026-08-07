@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { sql } from "kysely";
-import { db } from "../db";
-import { JobStatus, JobType } from "../db/types";
-import { asyncHandler } from "../middleware/auth";
-import { listSites } from "../services/sites";
-import { jobTotals } from "../services/stats";
-import { baseContext } from "../templating";
-import { panelAuth } from "./auth";
+import { db } from "../db/index.js";
+import { JobStatus, JobType } from "../db/types.js";
+import { asyncHandler } from "../middleware/auth.js";
+import { listSites } from "../services/sites.js";
+import { jobTotals } from "../services/stats.js";
+import { baseContext } from "../templating.js";
+import { panelAuth } from "./auth.js";
 
 export const historyRouter = Router();
 historyRouter.use(...panelAuth);

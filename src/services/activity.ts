@@ -1,5 +1,5 @@
-import { db } from "../db";
-import type { ActivityEntry } from "../db/types";
+import { db } from "../db/index.js";
+import type { ActivityEntry } from "../db/types.js";
 
 export interface LogOptions {
   workspaceId?: number | null;

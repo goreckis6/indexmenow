@@ -1,8 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.submitUrls = submitUrls;
-exports.keyFileUrl = keyFileUrl;
-const errors_1 = require("./errors");
+import { GoogleApiError } from "./errors.js";
 /** IndexNow jest wspolny dla Bing, Yandex, Seznam i Naver. */
 const ENDPOINTS = {
     bing: "https://www.bing.com/indexnow",
@@ -18,7 +14,7 @@ const STATUS_MEANING = {
     422: "URL-e nie naleza do tej domeny albo klucz sie nie zgadza",
     429: "Zbyt wiele zgloszen (rate limit)",
 };
-async function submitUrls(urls, key, keyLocation, engine = "generic") {
+export async function submitUrls(urls, key, keyLocation, engine = "generic") {
     if (urls.length === 0) {
         return { ok: false, status: 0, message: "Brak URL-i do zgloszenia", count: 0 };
     }
@@ -28,10 +24,10 @@ async function submitUrls(urls, key, keyLocation, engine = "generic") {
         host = new URL(first).host;
     }
     catch {
-        throw new errors_1.GoogleApiError(`Nieprawidlowy URL: ${first}`);
+        throw new GoogleApiError(`Nieprawidlowy URL: ${first}`);
     }
     if (!host)
-        throw new errors_1.GoogleApiError(`Nieprawidlowy URL: ${first}`);
+        throw new GoogleApiError(`Nieprawidlowy URL: ${first}`);
     const payload = {
         host,
         key,
@@ -52,7 +48,7 @@ async function submitUrls(urls, key, keyLocation, engine = "generic") {
     }
     catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        throw new errors_1.GoogleApiError(`Blad polaczenia z IndexNow: ${reason}`);
+        throw new GoogleApiError(`Blad polaczenia z IndexNow: ${reason}`);
     }
     const body = await response.text().catch(() => "");
     return {
@@ -64,7 +60,7 @@ async function submitUrls(urls, key, keyLocation, engine = "generic") {
         body: body.slice(0, 500),
     };
 }
-function keyFileUrl(siteHomeUrl, key) {
+export function keyFileUrl(siteHomeUrl, key) {
     try {
         const parsed = new URL(siteHomeUrl);
         return `${parsed.protocol}//${parsed.host}/${key}.txt`;

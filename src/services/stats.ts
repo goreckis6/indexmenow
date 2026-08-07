@@ -1,7 +1,7 @@
 import { sql } from "kysely";
-import { db } from "../db";
-import { IndexStatus, JobStatus, type IndexJob, type Site } from "../db/types";
-import { dayRange, daysAgo, todayIso } from "../lib/dates";
+import { db } from "../db/index.js";
+import { IndexStatus, JobStatus, type IndexJob, type Site } from "../db/types.js";
+import { dayRange, daysAgo, todayIso } from "../lib/dates.js";
 
 export async function recordSiteSnapshot(
   site: Pick<Site, "id">,
