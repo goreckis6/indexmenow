@@ -81,7 +81,7 @@ const STATEMENTS: string[] = [
     display_name VARCHAR(255) NOT NULL,
     home_url VARCHAR(512) NOT NULL,
     permission_level VARCHAR(64) NULL,
-    auto_index TINYINT(1) NOT NULL DEFAULT 0,
+    auto_index TINYINT(1) NOT NULL DEFAULT 1,
     priority INT NOT NULL DEFAULT 0,
     daily_limit INT NOT NULL DEFAULT 50,
     indexnow_key VARCHAR(64) NULL,
