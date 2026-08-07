@@ -149,12 +149,14 @@ async function buildFullApp() {
             path: "/",
         },
     }));
-    // Hostinger CDN (hcdn) cache'owal 303 z "/" → "/login". Po zalogowaniu
-    // edge oddawal HIT bez Cookie i petlil: /login (z sesja) → / → (cache) /login.
+    // Hostinger hcdn cache'owal 303 auth i robil ERR_TOO_MANY_REDIRECTS.
+    // Auth GET teraz serwuje login jako 200; tu dodatkowe naglowki na cala apke.
     app.use((req, res, next) => {
         if (req.path.startsWith("/static/"))
             return next();
         res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+        res.setHeader("CDN-Cache-Control", "no-store");
+        res.setHeader("Surrogate-Control", "no-store");
         res.setHeader("Pragma", "no-cache");
         res.setHeader("Expires", "0");
         res.setHeader("Vary", "Cookie");

@@ -5,12 +5,13 @@ import { db } from "../db/index.js";
 import { GoogleApiError } from "../google/errors.js";
 import * as oauth from "../google/oauth.js";
 import { decrypt, generateState } from "../lib/crypto.js";
-import { asyncHandler, flash, loadUser, redirectWithSession, requireAuth, resolveWorkspace, saveSession, } from "../middleware/auth.js";
+import { asyncHandler, flash, loadUser, redirectWithSession, renderLoginPage, requireAuth, resolveWorkspace, saveSession, } from "../middleware/auth.js";
 import { logEvent } from "../services/activity.js";
 import { createDefaultWorkspace } from "../services/workspaces.js";
-import { baseContext } from "../templating.js";
 export const authRouter = Router();
 authRouter.get("/login", loadUser, asyncHandler(async (req, res) => {
+    // Zalogowany: jeden redirect na panel. Niezalogowany: 200 bez Location
+    // (zadnych 303 / ↔ /login do cache'owania przez hcdn).
     if (req.user) {
         const rawNext = typeof req.query.next === "string" ? req.query.next : "/";
         const nextUrl = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/login")
@@ -18,11 +19,8 @@ authRouter.get("/login", loadUser, asyncHandler(async (req, res) => {
             : "/";
         return redirectWithSession(req, res, nextUrl);
     }
-    res.render("login.html", baseContext(req, {
-        google_configured: config.googleConfigured,
-        redirect_uri: config.redirectUri,
-        next: typeof req.query.next === "string" ? req.query.next : "/",
-    }));
+    const next = typeof req.query.next === "string" ? req.query.next : "/";
+    renderLoginPage(req, res, next);
 }));
 authRouter.get("/auth/google", asyncHandler(async (req, res) => {
     if (!config.googleConfigured) {

@@ -10,6 +10,7 @@ import {
   flash,
   loadUser,
   redirectWithSession,
+  renderLoginPage,
   requireAuth,
   resolveWorkspace,
   saveSession,
@@ -24,21 +25,18 @@ authRouter.get(
   "/login",
   loadUser,
   asyncHandler(async (req, res) => {
+    // Zalogowany: jeden redirect na panel. Niezalogowany: 200 bez Location
+    // (zadnych 303 / ↔ /login do cache'owania przez hcdn).
     if (req.user) {
       const rawNext = typeof req.query.next === "string" ? req.query.next : "/";
-      const nextUrl = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/login")
-        ? rawNext
-        : "/";
+      const nextUrl =
+        rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/login")
+          ? rawNext
+          : "/";
       return redirectWithSession(req, res, nextUrl);
     }
-    res.render(
-      "login.html",
-      baseContext(req, {
-        google_configured: config.googleConfigured,
-        redirect_uri: config.redirectUri,
-        next: typeof req.query.next === "string" ? req.query.next : "/",
-      }),
-    );
+    const next = typeof req.query.next === "string" ? req.query.next : "/";
+    renderLoginPage(req, res, next);
   }),
 );
 

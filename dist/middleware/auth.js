@@ -1,3 +1,4 @@
+import { config } from "../config.js";
 import { db } from "../db/index.js";
 import { createDefaultWorkspace } from "../services/workspaces.js";
 export function flash(req, message, category = "success") {
@@ -12,7 +13,16 @@ export function popFlashes(req) {
         req.session._flashes = [];
     return messages;
 }
-/** Zapis sesji w MySQL MUSI sie skonczyc przed redirectem — inaczej Hostinger gubi cookie i petla / ↔ /login. */
+/** Naglowki, ktorych Hostinger hcdn respektuje przy private content. */
+export function applyNoStore(res) {
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+    res.setHeader("CDN-Cache-Control", "no-store");
+    res.setHeader("Surrogate-Control", "no-store");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Vary", "Cookie");
+}
+/** Zapis sesji w MySQL MUSI sie skonczyc przed redirectem. */
 export function saveSession(req) {
     return new Promise((resolve, reject) => {
         if (!req.session) {
@@ -24,7 +34,24 @@ export function saveSession(req) {
 }
 export async function redirectWithSession(req, res, location) {
     await saveSession(req);
+    applyNoStore(res);
     res.redirect(303, location);
+}
+/**
+ * Pokazuje login jako 200 (BEZ Location).
+ * Redirecty auth na Hostingerze CDN potrafi cache'owac i robic ERR_TOO_MANY_REDIRECTS.
+ */
+export function renderLoginPage(req, res, nextPath = "/") {
+    applyNoStore(res);
+    const safeNext = nextPath.startsWith("/") && !nextPath.startsWith("//") && !nextPath.startsWith("/login")
+        ? nextPath
+        : "/";
+    res.status(200).render("login.html", {
+        flashes: popFlashes(req),
+        google_configured: config.googleConfigured,
+        redirect_uri: config.redirectUri,
+        next: safeNext,
+    });
 }
 /**
  * Express nie ma odpowiednika `Depends` z FastAPI, wiec obsluga bledow
@@ -52,17 +79,26 @@ export const loadUser = asyncHandler(async (req, _res, next) => {
 export const requireAuth = (req, res, next) => {
     if (req.user)
         return next();
-    // Unikaj /login?next=/login?... (petla w Location)
-    const pathOnly = (req.originalUrl || req.path || "/").split("?")[0] ?? "/";
-    if (pathOnly === "/" || pathOnly === "/login") {
+    // API — JSON, bez redirectow.
+    if (req.path.startsWith("/api/") || req.originalUrl.startsWith("/api/")) {
+        applyNoStore(res);
+        res.status(401).json({ detail: "Not authenticated" });
+        return;
+    }
+    // POST/PUT/... — jeden 303 do /login (formularze). GET — render 200 w miejscu.
+    if (req.method !== "GET" && req.method !== "HEAD") {
+        applyNoStore(res);
         res.redirect(303, "/login");
         return;
     }
-    res.redirect(303, `/login?next=${encodeURIComponent(req.originalUrl)}`);
+    const pathOnly = (req.originalUrl || "/").split("?")[0] ?? "/";
+    const nextPath = pathOnly === "/" || pathOnly === "/login" ? "/" : req.originalUrl;
+    renderLoginPage(req, res, nextPath);
 };
 export const requireApiAuth = (req, res, next) => {
     if (req.user)
         return next();
+    applyNoStore(res);
     res.status(401).json({ detail: "Not authenticated" });
 };
 /** Ustala aktywny workspace, tworzac domyslny przy pierwszym wejsciu. */
