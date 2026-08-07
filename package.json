@@ -8,13 +8,13 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node server.js",
     "dev": "tsx watch src/server.ts",
     "migrate": "tsx src/scripts/migrate.ts",
     "smoke": "tsx src/scripts/smoke.ts",
     "typecheck": "tsc --noEmit"
   },
-  "main": "dist/server.js",
+  "main": "server.js",
   "dependencies": {
     "cheerio": "^1.2.0",
     "croner": "^10.0.1",
@@ -27,7 +27,8 @@
     "kysely": "^0.29.4",
     "multer": "^2.2.0",
     "mysql2": "^3.23.2",
-    "nunjucks": "^3.2.4"
+    "nunjucks": "^3.2.4",
+    "typescript": "^7.0.2"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -36,7 +37,6 @@
     "@types/multer": "^2.2.0",
     "@types/node": "^26.1.2",
     "@types/nunjucks": "^3.2.6",
-    "tsx": "^4.23.9",
-    "typescript": "^7.0.2"
+    "tsx": "^4.23.9"
   }
 }

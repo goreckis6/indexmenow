@@ -22,7 +22,23 @@ import "./types";
 const MySQLStore = MySQLStoreFactory(session as unknown as typeof import("express-session"));
 
 async function main(): Promise<void> {
-  await migrate();
+  console.log(
+    `Start ${config.appName}: PORT=${config.port} HOST=${config.host} ` +
+      `BASE_URL=${config.baseUrl} DB=${config.db.user}@${config.db.host}:${config.db.port}/${config.db.database}`,
+  );
+
+  try {
+    await migrate();
+    console.log("Migracja schematu MySQL OK.");
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error("Nie moge polaczyc sie z MySQL / utworzyc tabel:", reason);
+    console.error(
+      "Sprawdz w hPanel zmienne DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME " +
+        "(dokladnie tak, jak w Databases -> MySQL).",
+    );
+    throw error;
+  }
 
   const app = express();
   app.set("trust proxy", 1);

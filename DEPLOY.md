@@ -31,9 +31,10 @@ Schemat tabel tworzy się sam przy pierwszym starcie aplikacji (`migrate`).
 | Framework | **Express** (albo *Other*) |
 | Node.js | **20** lub **22** |
 | Root directory | `/` (puste) |
-| Build command | `npm run build` |
-| Entry / start | `npm start` → `node dist/server.js` |
-| Output directory | zostaw puste (to nie jest frontend SPA) |
+| Build command / script | `build` (= `npm run build`) |
+| Output directory | `dist` |
+| Entry file | `server.js` (albo `dist/server.js`) |
+| Start | `npm start` |
 
 4. Wklej zmienne środowiskowe (poniżej) i kliknij **Deploy**.
 
