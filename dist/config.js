@@ -122,6 +122,8 @@ export const config = {
     port: int("PORT", 3000),
     baseUrl,
     secretKey,
+    /** Query ?v= na CSS/JS — bust cache CDN po deployu. */
+    assetVersion: str("ASSET_VERSION", "20260807b"),
     debug: bool("DEBUG", false),
     logLevel: str("LOG_LEVEL", "INFO"),
     timezone: str("TIMEZONE", "Europe/Warsaw"),

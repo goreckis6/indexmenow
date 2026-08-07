@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
-  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="icon" href="{{ '/static/img/favicon.svg'|asset }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ '/static/css/app.css'|asset }}">
   <script>
     (function () {
       var t = localStorage.getItem("imp-theme");
@@ -91,7 +91,7 @@
   </div>
 </div>
 
-<script src="/static/js/app.js"></script>
+<script src="{{ '/static/js/app.js'|asset }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

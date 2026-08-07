@@ -120,6 +120,24 @@ async function buildFullApp() {
     const app = express();
     // CDN + reverse proxy Hostingera: bez tego cookie Secure / req.secure sa zle.
     app.set("trust proxy", true);
+    // www czesto wskazuje na inne hosting (HTML), nie na ta apke Node — wtedy CSS
+    // wraca jako text/html i strona jest "bez styli". Robimy kanoniczny redirect.
+    app.use((req, res, next) => {
+        const host = (req.hostname || "").toLowerCase();
+        if (host.startsWith("www.")) {
+            const target = new URL(req.originalUrl || "/", config.baseUrl);
+            res.redirect(301, target.toString());
+            return;
+        }
+        next();
+    });
+    // Static PRZED sesja — zero szans, ze auth/CDN-middleware ruszy CSS/JS.
+    const publicDir = path.join(ROOT_DIR, "public");
+    const publicDirCwd = path.join(process.cwd(), "public");
+    app.use("/static", express.static(publicDir, { maxAge: "7d", fallthrough: true, index: false }));
+    if (publicDirCwd !== publicDir) {
+        app.use("/static", express.static(publicDirCwd, { maxAge: "7d", fallthrough: false, index: false }));
+    }
     const sessionStore = new MySQLStore({
         clearExpired: true,
         checkExpirationInterval: 15 * 60 * 1000,
@@ -164,7 +182,6 @@ async function buildFullApp() {
     });
     app.use(express.urlencoded({ extended: true, limit: "2mb" }));
     app.use(express.json({ limit: "1mb" }));
-    app.use("/static", express.static(path.join(ROOT_DIR, "public"), { maxAge: "1d" }));
     // Przed sesja / auth — Hostinger i monitoring musza trafic w zywy JSON.
     app.get("/healthz", (_req, res) => {
         res.json({ status: "ok", app: config.appName, version: "1.0.0" });

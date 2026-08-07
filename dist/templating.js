@@ -138,6 +138,12 @@ export function configureTemplates(app) {
     });
     env.addGlobal("app_name", config.appName);
     env.addGlobal("now", () => new Date());
+    env.addGlobal("asset_version", config.assetVersion);
+    env.addFilter("asset", (value) => {
+        const pathValue = String(value ?? "");
+        const sep = pathValue.includes("?") ? "&" : "?";
+        return `${pathValue}${sep}v=${config.assetVersion}`;
+    });
     return env;
 }
 /** Adres bazy do wyswietlenia w panelu - bez hasla. */

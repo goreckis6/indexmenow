@@ -142,6 +142,12 @@ export function configureTemplates(app: Express): nunjucks.Environment {
 
   env.addGlobal("app_name", config.appName);
   env.addGlobal("now", () => new Date());
+  env.addGlobal("asset_version", config.assetVersion);
+  env.addFilter("asset", (value: unknown) => {
+    const pathValue = String(value ?? "");
+    const sep = pathValue.includes("?") ? "&" : "?";
+    return `${pathValue}${sep}v=${config.assetVersion}`;
+  });
 
   return env;
 }
