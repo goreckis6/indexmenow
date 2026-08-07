@@ -25,6 +25,18 @@ function bool(name, fallback) {
     return ["1", "true", "yes", "on"].includes(value);
 }
 /**
+ * Na Hostingerze `localhost` czesto rozwija sie do IPv6 `::1`, a konto MySQL
+ * ma grant tylko dla `127.0.0.1` / `localhost` (IPv4) — wtedy: Access denied
+ * for user 'uXXXX'@'::1'. Wymuszamy IPv4.
+ */
+function normalizeDbHost(host) {
+    const trimmed = host.trim();
+    if (!trimmed || trimmed === "localhost" || trimmed === "::1") {
+        return "127.0.0.1";
+    }
+    return trimmed;
+}
+/**
  * Hostinger udostepnia dane MySQL pod roznymi nazwami zaleznie od miejsca,
  * w ktorym sie je konfiguruje. Przyjmujemy jedno i drugie, zeby nie zmuszac
  * do przepisywania wartosci recznie.
@@ -42,7 +54,7 @@ function databaseConfig() {
         catch {
             return {
                 db: {
-                    host: "localhost",
+                    host: "127.0.0.1",
                     port: 3306,
                     user: "root",
                     password: "",
@@ -54,7 +66,7 @@ function databaseConfig() {
         if (!["mysql:", "mariadb:"].includes(parsed.protocol)) {
             return {
                 db: {
-                    host: "localhost",
+                    host: "127.0.0.1",
                     port: 3306,
                     user: "root",
                     password: "",
@@ -68,7 +80,7 @@ function databaseConfig() {
         if (!database) {
             return {
                 db: {
-                    host: parsed.hostname || "localhost",
+                    host: normalizeDbHost(parsed.hostname || "127.0.0.1"),
                     port: parsed.port ? Number.parseInt(parsed.port, 10) : 3306,
                     user: decodeURIComponent(parsed.username || "root"),
                     password: decodeURIComponent(parsed.password || ""),
@@ -79,7 +91,7 @@ function databaseConfig() {
         }
         return {
             db: {
-                host: parsed.hostname,
+                host: normalizeDbHost(parsed.hostname),
                 port: parsed.port ? Number.parseInt(parsed.port, 10) : 3306,
                 user: decodeURIComponent(parsed.username),
                 password: decodeURIComponent(parsed.password),
@@ -90,7 +102,7 @@ function databaseConfig() {
     }
     return {
         db: {
-            host: str("DB_HOST", str("MYSQL_HOST", "localhost")),
+            host: normalizeDbHost(str("DB_HOST", str("MYSQL_HOST", "127.0.0.1"))),
             port: int("DB_PORT", int("MYSQL_PORT", 3306)),
             user: str("DB_USER", str("MYSQL_USER", "root")),
             password: str("DB_PASSWORD", str("MYSQL_PASSWORD", "")),

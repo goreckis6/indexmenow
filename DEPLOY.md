@@ -60,15 +60,16 @@ BASE_URL=https://morphyhub.com
 SECRET_KEY=TUTAJ_WYNIK_openssl_rand_base64_48
 GOOGLE_CLIENT_ID=TUTAJ_CLIENT_ID
 GOOGLE_CLIENT_SECRET=TUTAJ_CLIENT_SECRET
-DB_HOST=localhost
+DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=TUTAJ_USER_MYSQL
 DB_PASSWORD=TUTAJ_HASLO_MYSQL
 DB_NAME=TUTAJ_NAZWA_BAZY
 ```
 
-Na Hostingerze `DB_HOST` bywa `localhost` albo adres typu `mysql.hostinger.com`
-— skopiuj dokładnie to, co pokazuje panel baz.
+Na Hostingerze ustaw **`DB_HOST=127.0.0.1`** (nie `localhost` — to często ląduje na IPv6 `::1` i MySQL odrzuca: `Access denied ... '@'::1'`).
+
+Skopiuj user / hasło / nazwę bazy dokładnie z **Databases → MySQL**. Jeśli nadal Access denied — w panelu zresetuj hasło użytkownika i wklej nowe do Environment variables.
 
 `BASE_URL` **musi być `https://...`** i identyczny z redirect URI w Google
 (`https://morphyhub.com/auth/callback`).
