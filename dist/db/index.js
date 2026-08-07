@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.db = exports.pool = void 0;
+exports.pingDatabase = pingDatabase;
 exports.closeDatabase = closeDatabase;
 const kysely_1 = require("kysely");
 const mysql2_1 = __importDefault(require("mysql2"));
@@ -16,14 +17,11 @@ exports.pool = mysql2_1.default.createPool({
     database: config_1.config.db.database,
     connectionLimit: 10,
     waitForConnections: true,
-    // Wszystkie znaczniki czasu trzymamy w UTC. Bez tego mysql2 interpretowalby
-    // DATETIME w strefie serwera bazy, ktora rzadko jest ta sama co strefa aplikacji.
+    // Bez limitu Hostinger zabija proces (503), zanim zdazymy zalogowac blad.
+    connectTimeout: 8_000,
     timezone: "Z",
-    // Kolumny DATE maja wracac jako "RRRR-MM-DD". Jako obiekt Date gubilyby
-    // sens przy porownywaniu dni, bo doklejalaby sie do nich godzina i strefa.
     dateStrings: ["DATE"],
     typeCast(field, next) {
-        // MySQL nie ma typu boolean - BOOLEAN to alias na TINYINT(1).
         if (field.type === "TINY" && field.length === 1) {
             const value = field.string();
             return value === null ? null : value === "1";
@@ -34,6 +32,16 @@ exports.pool = mysql2_1.default.createPool({
 exports.db = new kysely_1.Kysely({
     dialect: new kysely_1.MysqlDialect({ pool: exports.pool }),
 });
+/** Szybki test polaczenia - rzuca z czytelnym komunikatem zamiast wisiec. */
+async function pingDatabase() {
+    const connection = await exports.pool.promise().getConnection();
+    try {
+        await connection.query("SELECT 1");
+    }
+    finally {
+        connection.release();
+    }
+}
 async function closeDatabase() {
     await exports.db.destroy();
 }

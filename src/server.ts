@@ -4,7 +4,7 @@ import session from "express-session";
 import MySQLStoreFactory from "express-mysql-session";
 import multer from "multer";
 import { config, ROOT_DIR } from "./config";
-import { closeDatabase, pool } from "./db";
+import { closeDatabase, pingDatabase, pool } from "./db";
 import { migrate } from "./db/migrate";
 import { HttpError, loadUser } from "./middleware/auth";
 import { apiRouter } from "./routes/api";
@@ -21,21 +21,72 @@ import "./types";
 
 const MySQLStore = MySQLStoreFactory(session as unknown as typeof import("express-session"));
 
+function assertProductionConfig(): void {
+  const missing: string[] = [];
+  if (!process.env["DB_HOST"] && !process.env["DATABASE_URL"] && !process.env["MYSQL_HOST"]) {
+    missing.push("DB_HOST (albo DATABASE_URL)");
+  }
+  if (!process.env["DB_USER"] && !process.env["DATABASE_URL"] && !process.env["MYSQL_USER"]) {
+    missing.push("DB_USER");
+  }
+  if (!process.env["DB_NAME"] && !process.env["DATABASE_URL"] && !process.env["MYSQL_DATABASE"]) {
+    missing.push("DB_NAME");
+  }
+  if (
+    !process.env["DB_PASSWORD"] &&
+    !process.env["DATABASE_URL"] &&
+    !process.env["MYSQL_PASSWORD"]
+  ) {
+    missing.push("DB_PASSWORD");
+  }
+  if (!process.env["SECRET_KEY"]) missing.push("SECRET_KEY");
+  if (!process.env["BASE_URL"]) missing.push("BASE_URL");
+
+  // Na Hostingerze PORT jest wstrzykiwany automatycznie - bez niego i tak
+  // polecimy na 8006, ktorego proxy nie zna, i dostaniemy 503.
+  if (config.isHttps && !process.env["PORT"]) {
+    console.warn(
+      "Uwaga: brak zmiennej PORT. Hostinger powinien ja ustawic sam. " +
+        "Jesli jej nie ma, proxy nie trafi w proces.",
+    );
+  }
+
+  if (config.isHttps && missing.length > 0) {
+    throw new Error(
+      `Brak wymaganych zmiennych srodowiskowych w hPanel: ${missing.join(", ")}. ` +
+        "Websites → Twoja strona → Environment variables.",
+    );
+  }
+}
+
 async function main(): Promise<void> {
   console.log(
-    `Start ${config.appName}: PORT=${config.port} HOST=${config.host} ` +
-      `BASE_URL=${config.baseUrl} DB=${config.db.user}@${config.db.host}:${config.db.port}/${config.db.database}`,
+    `Start ${config.appName}: PORT=${config.port} BASE_URL=${config.baseUrl} ` +
+      `DB=${config.db.user}@${config.db.host}:${config.db.port}/${config.db.database}`,
+  );
+  console.log(
+    `Env: PORT=${process.env["PORT"] ? "set" : "MISSING"} ` +
+      `DB_HOST=${process.env["DB_HOST"] ? "set" : "MISSING"} ` +
+      `DB_USER=${process.env["DB_USER"] ? "set" : "MISSING"} ` +
+      `DB_NAME=${process.env["DB_NAME"] ? "set" : "MISSING"} ` +
+      `DB_PASSWORD=${process.env["DB_PASSWORD"] ? "set" : "MISSING"} ` +
+      `SECRET_KEY=${process.env["SECRET_KEY"] ? "set" : "MISSING"} ` +
+      `BASE_URL=${process.env["BASE_URL"] ? "set" : "MISSING"}`,
   );
 
+  assertProductionConfig();
+
   try {
+    await pingDatabase();
+    console.log("Polaczenie z MySQL OK.");
     await migrate();
     console.log("Migracja schematu MySQL OK.");
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     console.error("Nie moge polaczyc sie z MySQL / utworzyc tabel:", reason);
     console.error(
-      "Sprawdz w hPanel zmienne DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME " +
-        "(dokladnie tak, jak w Databases -> MySQL).",
+      "W hPanel → Environment variables ustaw DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME " +
+        "dokladnie jak w Databases → MySQL (z prefixem uXXXX_). Potem Redeploy.",
     );
     throw error;
   }
@@ -58,8 +109,6 @@ async function main(): Promise<void> {
         },
       },
     },
-    // Cast: @types/express-mysql-session wlecze wlasna kopie typow mysql2,
-    // ktora nie zgadza sie z biezacym pakietem mimo identycznego API.
     pool as never,
   );
 
@@ -73,7 +122,6 @@ async function main(): Promise<void> {
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         sameSite: "lax",
-        // Za TLS-terminujacym proxy Hostingera ciasteczko musi byc Secure.
         secure: config.isHttps,
         httpOnly: true,
       },
@@ -92,8 +140,6 @@ async function main(): Promise<void> {
     limits: { fileSize: 2 * 1024 * 1024 },
   });
 
-  // Multer tylko na trasach, ktore przyjmuja pliki - inaczej kazdy POST
-  // bez multipart dostalby blad Content-Type.
   app.use("/urls/add", upload.single("file"));
   app.use("/settings/service-account", upload.single("file"));
 
@@ -147,8 +193,11 @@ async function main(): Promise<void> {
 
   await startScheduler();
 
-  const server = app.listen(config.port, config.host, () => {
-    console.log(`${config.appName} dziala na ${config.baseUrl} (bind ${config.host}:${config.port})`);
+  // Hostinger w docsach Express pokazuje wylacznie listen(port) - bez hosta.
+  // Podanie HOST=0.0.0.0 czasem psuje ich proxy i daje 503 mimo zywego procesu.
+  const port = config.port;
+  const server = app.listen(port, () => {
+    console.log(`${config.appName} nasluchuje na porcie ${port} (BASE_URL=${config.baseUrl})`);
     if (!config.googleConfigured) {
       console.warn("Brak GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET - logowanie bedzie niedostepne.");
     }

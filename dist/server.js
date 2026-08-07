@@ -24,18 +24,59 @@ const scheduler_1 = require("./services/scheduler");
 const templating_1 = require("./templating");
 require("./types");
 const MySQLStore = (0, express_mysql_session_1.default)(express_session_1.default);
+function assertProductionConfig() {
+    const missing = [];
+    if (!process.env["DB_HOST"] && !process.env["DATABASE_URL"] && !process.env["MYSQL_HOST"]) {
+        missing.push("DB_HOST (albo DATABASE_URL)");
+    }
+    if (!process.env["DB_USER"] && !process.env["DATABASE_URL"] && !process.env["MYSQL_USER"]) {
+        missing.push("DB_USER");
+    }
+    if (!process.env["DB_NAME"] && !process.env["DATABASE_URL"] && !process.env["MYSQL_DATABASE"]) {
+        missing.push("DB_NAME");
+    }
+    if (!process.env["DB_PASSWORD"] &&
+        !process.env["DATABASE_URL"] &&
+        !process.env["MYSQL_PASSWORD"]) {
+        missing.push("DB_PASSWORD");
+    }
+    if (!process.env["SECRET_KEY"])
+        missing.push("SECRET_KEY");
+    if (!process.env["BASE_URL"])
+        missing.push("BASE_URL");
+    // Na Hostingerze PORT jest wstrzykiwany automatycznie - bez niego i tak
+    // polecimy na 8006, ktorego proxy nie zna, i dostaniemy 503.
+    if (config_1.config.isHttps && !process.env["PORT"]) {
+        console.warn("Uwaga: brak zmiennej PORT. Hostinger powinien ja ustawic sam. " +
+            "Jesli jej nie ma, proxy nie trafi w proces.");
+    }
+    if (config_1.config.isHttps && missing.length > 0) {
+        throw new Error(`Brak wymaganych zmiennych srodowiskowych w hPanel: ${missing.join(", ")}. ` +
+            "Websites → Twoja strona → Environment variables.");
+    }
+}
 async function main() {
-    console.log(`Start ${config_1.config.appName}: PORT=${config_1.config.port} HOST=${config_1.config.host} ` +
-        `BASE_URL=${config_1.config.baseUrl} DB=${config_1.config.db.user}@${config_1.config.db.host}:${config_1.config.db.port}/${config_1.config.db.database}`);
+    console.log(`Start ${config_1.config.appName}: PORT=${config_1.config.port} BASE_URL=${config_1.config.baseUrl} ` +
+        `DB=${config_1.config.db.user}@${config_1.config.db.host}:${config_1.config.db.port}/${config_1.config.db.database}`);
+    console.log(`Env: PORT=${process.env["PORT"] ? "set" : "MISSING"} ` +
+        `DB_HOST=${process.env["DB_HOST"] ? "set" : "MISSING"} ` +
+        `DB_USER=${process.env["DB_USER"] ? "set" : "MISSING"} ` +
+        `DB_NAME=${process.env["DB_NAME"] ? "set" : "MISSING"} ` +
+        `DB_PASSWORD=${process.env["DB_PASSWORD"] ? "set" : "MISSING"} ` +
+        `SECRET_KEY=${process.env["SECRET_KEY"] ? "set" : "MISSING"} ` +
+        `BASE_URL=${process.env["BASE_URL"] ? "set" : "MISSING"}`);
+    assertProductionConfig();
     try {
+        await (0, db_1.pingDatabase)();
+        console.log("Polaczenie z MySQL OK.");
         await (0, migrate_1.migrate)();
         console.log("Migracja schematu MySQL OK.");
     }
     catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         console.error("Nie moge polaczyc sie z MySQL / utworzyc tabel:", reason);
-        console.error("Sprawdz w hPanel zmienne DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME " +
-            "(dokladnie tak, jak w Databases -> MySQL).");
+        console.error("W hPanel → Environment variables ustaw DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME " +
+            "dokladnie jak w Databases → MySQL (z prefixem uXXXX_). Potem Redeploy.");
         throw error;
     }
     const app = (0, express_1.default)();
@@ -53,10 +94,7 @@ async function main() {
                 data: "data",
             },
         },
-    }, 
-    // Cast: @types/express-mysql-session wlecze wlasna kopie typow mysql2,
-    // ktora nie zgadza sie z biezacym pakietem mimo identycznego API.
-    db_1.pool);
+    }, db_1.pool);
     app.use((0, express_session_1.default)({
         name: "imp_session",
         secret: config_1.config.secretKey,
@@ -66,7 +104,6 @@ async function main() {
         cookie: {
             maxAge: 30 * 24 * 60 * 60 * 1000,
             sameSite: "lax",
-            // Za TLS-terminujacym proxy Hostingera ciasteczko musi byc Secure.
             secure: config_1.config.isHttps,
             httpOnly: true,
         },
@@ -80,8 +117,6 @@ async function main() {
         storage: multer_1.default.memoryStorage(),
         limits: { fileSize: 2 * 1024 * 1024 },
     });
-    // Multer tylko na trasach, ktore przyjmuja pliki - inaczej kazdy POST
-    // bez multipart dostalby blad Content-Type.
     app.use("/urls/add", upload.single("file"));
     app.use("/settings/service-account", upload.single("file"));
     app.use(auth_2.authRouter);
@@ -122,8 +157,11 @@ async function main() {
         res.status(404).render("errors/404.html", (0, templating_1.baseContext)(req));
     });
     await (0, scheduler_1.startScheduler)();
-    const server = app.listen(config_1.config.port, config_1.config.host, () => {
-        console.log(`${config_1.config.appName} dziala na ${config_1.config.baseUrl} (bind ${config_1.config.host}:${config_1.config.port})`);
+    // Hostinger w docsach Express pokazuje wylacznie listen(port) - bez hosta.
+    // Podanie HOST=0.0.0.0 czasem psuje ich proxy i daje 503 mimo zywego procesu.
+    const port = config_1.config.port;
+    const server = app.listen(port, () => {
+        console.log(`${config_1.config.appName} nasluchuje na porcie ${port} (BASE_URL=${config_1.config.baseUrl})`);
         if (!config_1.config.googleConfigured) {
             console.warn("Brak GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET - logowanie bedzie niedostepne.");
         }
